@@ -9,5 +9,6 @@ export const demoTask = {
 };
 export const demoFeedback: FeedbackResult = {
 	schemaVersion: '1.0', languageStatus: 'clean', decision: 'pass',
-	priorityFeedback: [{ title: '主張をはっきり示せています', guidance: '次は、その理由を一文加えて、二文でつなげてみましょう。' }]
+	priorityFeedback: [{ title: '主張をはっきり示せています', guidance: '次は、その理由を一文加えて、二文でつなげてみましょう。' }],
+	skillResults: [{ skillKey: 'clear_claim', outcome: 'achieved', severity: 0, evidence: '主張が明確です。' }]
 };

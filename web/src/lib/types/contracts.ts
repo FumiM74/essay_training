@@ -15,10 +15,19 @@ export type AccessState = {
 
 export type LanguageStatus = 'clean' | 'minor_issue' | 'revision_required';
 export type FeedbackDecision = 'pass' | 'revise';
+export type SkillOutcome = 'achieved' | 'partial' | 'missed';
+
+export type SkillResult = {
+	skillKey: import('./curriculum').SkillKey;
+	outcome: SkillOutcome;
+	severity: 0 | 1 | 2;
+	evidence: string;
+};
 
 export type FeedbackResult = {
 	schemaVersion: string;
 	languageStatus: LanguageStatus;
 	decision: FeedbackDecision;
 	priorityFeedback: Array<{ title: string; guidance: string }>;
+	skillResults: SkillResult[];
 };

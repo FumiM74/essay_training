@@ -3,6 +3,28 @@ node_modules/
 .svelte-kit/
 build/
 .pnpm-store/
+coverage/
+test-results/
+playwright-report/
+blob-report/
+*.tsbuildinfo
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+*.xlsx.inspect.ndjson
+
+# Microsoft Office lock files
+~$*.xlsx
+~$*.docx
 
 # Local secrets (at any project level)
 .env
@@ -19,3 +41,4 @@ supabase/.temp/
 
 # OS metadata
 .DS_Store
+Thumbs.db
