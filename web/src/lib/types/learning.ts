@@ -16,13 +16,20 @@ export type SubmissionRecord = {
 	text: string;
 	submittedAt: string;
 	feedback: FeedbackResult;
+	phase: LearningPhase;
 };
+
+export type LearningPhase = 'training' | 'promotion_test' | 'retraining';
 
 export type LearningProgress = {
 	currentStageId: number;
 	highestUnlockedStageId: number;
-	consecutivePasses: number;
-	requiredConsecutivePasses: number;
+	phase: LearningPhase;
+	phasePasses: number;
+	phaseAttempts: number;
+	requiredTrainingPasses: number;
+	promotionTestQuestionCount: number;
+	requiredRetrainingPasses: number;
 	courseCompletedAt: string | null;
 };
 
@@ -37,6 +44,7 @@ export type ProblemHistoryRecord = {
 	promptHash: string;
 	issuedAt: string;
 	submittedAt: string | null;
+	phase: LearningPhase;
 };
 
 export type LearnerSkillStat = {
@@ -52,7 +60,7 @@ export type LearnerSkillStat = {
 };
 
 export type LocalLearningState = {
-	version: 4;
+	version: 5;
 	approvedProblems?: PracticeTask[];
 	drafts: Record<string, DraftRecord>;
 	submissions: SubmissionRecord[];

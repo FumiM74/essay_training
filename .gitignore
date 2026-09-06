@@ -42,3 +42,6 @@ supabase/.temp/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Personal operation manuals
+/Supabase操作マニュアル.md

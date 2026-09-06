@@ -1,11 +1,11 @@
 import rawCurriculum from './curriculum.json';
-import type { Curriculum, PracticeTask } from '$lib/types/curriculum';
+import { MAX_STAGE_ID, type Curriculum, type PracticeTask } from '$lib/types/curriculum';
 
 export function validateCurriculum(value: unknown): Curriculum {
 	if (!value || typeof value !== 'object') throw new Error('カリキュラムがオブジェクトではありません。');
 	const candidate = value as Partial<Curriculum>;
 	if (candidate.schemaVersion !== '1.1') throw new Error('未対応のカリキュラム版です。');
-	if (!Array.isArray(candidate.stages) || candidate.stages.length !== 14) throw new Error('段階0〜13が必要です。');
+	if (!Array.isArray(candidate.stages) || candidate.stages.length !== MAX_STAGE_ID + 1) throw new Error('段階0〜14が必要です。');
 	const taskIds = new Set<string>();
 	for (let index = 0; index < candidate.stages.length; index += 1) {
 		const stage = candidate.stages[index];

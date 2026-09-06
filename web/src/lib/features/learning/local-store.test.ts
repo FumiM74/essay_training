@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createMockFeedback } from './feedback';
+import { createBasicQuestionSetFeedback, createMockFeedback } from './feedback';
 import { generatePracticeTask } from './problem-generator';
-import { activityCounts, loadLearningState, parseLearningState, recordProblemIssued, recordSubmission, saveCurrentStage, saveDraft, saveRequiredConsecutivePasses } from './local-store';
+import { activityCounts, loadLearningState, parseLearningState, recordProblemIssued, recordSubmission, saveCurrentStage, saveDraft, saveProgressionSettings } from './local-store';
 
 function memoryStorage() {
 	const values = new Map<string, string>();
@@ -20,26 +20,26 @@ describe('local learning store', () => {
 
 	it('提出を履歴・完了・日次活動へ反映する', () => {
 		const storage = memoryStorage();
-		const feedback = createMockFeedback('私は公共の場で使いやすいデザインが必要だと思います。多くの人が安全に利用できるからです。', 1);
+		const feedback = createMockFeedback('私は、公共の場にはだれもが使いやすいデザインが必要だと思います。', 1);
 		recordSubmission({ requestId: 'request-1', taskId: 'stage-1-practice-1', stageId: 1, taskTitle: '一文完成の練習', text: '本文です。', feedback }, storage);
 		const state = loadLearningState(storage);
 		expect(state.submissions).toHaveLength(1);
-		expect(state.progress.consecutivePasses).toBe(1);
+		expect(state.progress.phasePasses).toBe(1);
 		expect([...activityCounts(state).values()]).toEqual([1]);
 	});
 
-	it('旧version 1の保存データを問題履歴ごとversion 4へ移行する', () => {
-		const feedback = createMockFeedback('私は公共の場で使いやすいデザインが必要だと思います。多くの人が安全に利用できるからです。', 1);
+	it('旧version 1の保存データを問題履歴ごとversion 5へ移行する', () => {
+		const feedback = createMockFeedback('私は、公共の場にはだれもが使いやすいデザインが必要だと思います。', 1);
 		const legacy = JSON.stringify({ version: 1, drafts: {}, submissions: [{ id: 'old', taskId: 'stage-1-practice-1', stageId: 1, taskTitle: '旧問題', text: '本文です。', submittedAt: '2026-08-24T00:00:00Z', feedback }] });
 		const state = parseLearningState(legacy);
-		expect(state.version).toBe(4);
+		expect(state.version).toBe(5);
 		expect(state.submissions).toHaveLength(1);
 		expect(state.problemHistory).toHaveLength(1);
-		expect(state.progress).toMatchObject({ currentStageId: 1, highestUnlockedStageId: 1, consecutivePasses: 1, requiredConsecutivePasses: 3 });
+		expect(state.progress).toMatchObject({ currentStageId: 1, highestUnlockedStageId: 1, phase: 'training', phasePasses: 1, requiredTrainingPasses: 10 });
 	});
 
 	it('version 3の問題履歴だけが壊れていても提出履歴から安全に再構築する', () => {
-		const feedback = createMockFeedback('私は公共の場で使いやすいデザインが必要だと思います。多くの人が安全に利用できるからです。', 1);
+		const feedback = createMockFeedback('私は、公共の場にはだれもが使いやすいデザインが必要だと思います。', 1);
 		const submission = { id: 'repair', taskId: 'stage-1-practice-1', stageId: 1, taskTitle: '復旧問題', text: '本文です。', submittedAt: '2026-08-24T00:00:00Z', feedback };
 		const raw = JSON.stringify({ version: 3, drafts: {}, submissions: [submission], problemHistory: [{ broken: true }], progress: { ...loadLearningState(null).progress } });
 		const state = parseLearningState(raw);
@@ -54,7 +54,7 @@ describe('local learning store', () => {
 		recordProblemIssued(task, storage);
 		const state = loadLearningState(storage);
 		expect(state.problemHistory).toHaveLength(1);
-		expect(state.problemHistory[0].features).toMatchObject({ version: 2, promptFamily: 'complete-one-sentence' });
+		expect(state.problemHistory[0].features).toMatchObject({ version: 2, promptFamily: 'five-question-language-basics' });
 		expect(state.problemHistory[0].promptHash).toMatch(/^fnv1a:/);
 	});
 
@@ -72,38 +72,101 @@ describe('local learning store', () => {
 		const state = loadLearningState(storage);
 		state.progress.currentStageId = 3;
 		state.progress.highestUnlockedStageId = 3;
-		storage.setItem('essay-training-local-state-v4', JSON.stringify(state));
+		storage.setItem('essay-training-local-state-v5', JSON.stringify(state));
 		const progress = saveCurrentStage(1, storage);
-		expect(progress).toMatchObject({ currentStageId: 1, highestUnlockedStageId: 3, consecutivePasses: 0 });
+		expect(progress).toMatchObject({ currentStageId: 1, highestUnlockedStageId: 3, phase: 'training', phasePasses: 0 });
 	});
 
 	it('同じrequestIdの再送で提出と連続合格を二重計上しない', () => {
 		const storage = memoryStorage();
-		const feedback = createMockFeedback('私は公共の場で使いやすいデザインが必要だと思います。多くの人が安全に利用できるからです。', 1);
+		const feedback = createMockFeedback('私は、公共の場にはだれもが使いやすいデザインが必要だと思います。', 1);
 		const input = { requestId: 'same-request', taskId: 'stage-1-practice-1', stageId: 1, taskTitle: '一文完成の練習', text: '本文です。', feedback };
 		recordSubmission(input, storage);
 		recordSubmission(input, storage);
 		const state = loadLearningState(storage);
 		expect(state.submissions).toHaveLength(1);
-		expect(state.progress.consecutivePasses).toBe(1);
+		expect(state.progress.phasePasses).toBe(1);
 	});
 
 	it('同じ問題を別のrequestIdで送っても連続合格を二重計上しない', () => {
 		const storage = memoryStorage();
-		const feedback = createMockFeedback('私は公共の場で使いやすいデザインが必要だと思います。多くの人が安全に利用できるからです。', 1);
+		const feedback = createMockFeedback('私は、公共の場にはだれもが使いやすいデザインが必要だと思います。', 1);
 		const input = { requestId: 'first-request', taskId: 'stage-1-practice-1', stageId: 1, taskTitle: '一文完成の練習', text: '本文です。', feedback };
 		recordSubmission(input, storage);
 		recordSubmission({ ...input, requestId: 'second-request' }, storage);
 		const state = loadLearningState(storage);
 		expect(state.submissions).toHaveLength(1);
-		expect(state.progress.consecutivePasses).toBe(1);
+		expect(state.progress.phasePasses).toBe(1);
 	});
 
-	it('必要な連続合格回数を1〜10回で変更できる', () => {
+	it('進級テストと訓練の回数を1〜10回で変更できる', () => {
 		const storage = memoryStorage();
-		expect(saveRequiredConsecutivePasses(5, storage).requiredConsecutivePasses).toBe(5);
-		expect(() => saveRequiredConsecutivePasses(0, storage)).toThrow();
-		expect(() => saveRequiredConsecutivePasses(11, storage)).toThrow();
+		const settings = { requiredTrainingPasses: 5, promotionTestQuestionCount: 4, requiredRetrainingPasses: 2 };
+		expect(saveProgressionSettings(settings, storage)).toMatchObject(settings);
+		expect(() => saveProgressionSettings({ ...settings, promotionTestQuestionCount: 0 }, storage)).toThrow();
+		expect(() => saveProgressionSettings({ ...settings, requiredRetrainingPasses: 11 }, storage)).toThrow();
+	});
+
+	it('進級テストの不合格は同じ問題を終了し、合格数を保ったまま次の問題へ進む', () => {
+		const storage = memoryStorage();
+		const state = loadLearningState(storage);
+		state.progress = { ...state.progress, phase: 'promotion_test', phasePasses: 1, phaseAttempts: 1 };
+		storage.setItem('essay-training-local-state-v5', JSON.stringify(state));
+		const task = generatePracticeTask(1, 8);
+		recordProblemIssued(task, storage);
+		const feedback = createMockFeedback('短い', 1, task.features?.skillTargets);
+		recordSubmission({ requestId: 'promotion-fail', taskId: task.id, stageId: 1, taskTitle: task.title, text: '短い', feedback }, storage);
+		const after = loadLearningState(storage);
+		expect(after.problemHistory.find((item) => item.taskId === task.id)?.submittedAt).not.toBeNull();
+		expect(after.drafts[task.id]).toBeUndefined();
+		expect(after.progress).toMatchObject({ phase: 'promotion_test', phasePasses: 1, phaseAttempts: 2 });
+	});
+
+	it('段階1は同じセットを修正し、全問正解後だけ合格数を増やす', () => {
+		const storage = memoryStorage();
+		const task = generatePracticeTask(1, 3);
+		recordProblemIssued(task, storage);
+		const answers = Object.fromEntries(task.questionSet!.map((question) => [question.id, question.acceptedAnswers[0]]));
+		answers[task.questionSet![0].id] = '誤答';
+		const feedback = createBasicQuestionSetFeedback(task.questionSet!, answers);
+		recordSubmission({ requestId: 'stage-one-fail', taskId: task.id, stageId: 1, taskTitle: task.title, text: '5問の解答', feedback }, storage);
+		const state = loadLearningState(storage);
+		expect(state.problemHistory.find((item) => item.taskId === task.id)?.submittedAt).toBeNull();
+		expect(state.problemHistory.filter((item) => item.taskId === task.id)).toHaveLength(1);
+		expect(state.drafts[task.id]).toBeDefined();
+		expect(state.progress.phasePasses).toBe(0);
+		answers[task.questionSet![0].id] = task.questionSet![0].acceptedAnswers[0];
+		const corrected = { requestId: 'stage-one-pass', taskId: task.id, stageId: 1, taskTitle: task.title, text: '修正済み', feedback: createBasicQuestionSetFeedback(task.questionSet!, answers) };
+		recordSubmission(corrected, storage);
+		recordSubmission(corrected, storage);
+		const after = loadLearningState(storage);
+		expect(after.progress.phasePasses).toBe(1);
+		expect(after.submissions).toHaveLength(2);
+		expect(after.problemHistory).toHaveLength(1);
+		expect(after.problemHistory[0].submittedAt).not.toBeNull();
+		expect(after.drafts[task.id]).toBeUndefined();
+	});
+
+	it('要修正の答案を同じ問題で再提出でき、合格時だけ問題を完了する', () => {
+		const storage = memoryStorage();
+		const initial = loadLearningState(storage);
+		initial.progress = { ...initial.progress, currentStageId: 2, highestUnlockedStageId: 2 };
+		storage.setItem('essay-training-local-state-v5', JSON.stringify(initial));
+		const task = generatePracticeTask(2, 7);
+		recordProblemIssued(task, storage);
+		const revise = createMockFeedback('短い', 2, task.features?.skillTargets);
+		recordSubmission({ requestId: 'revision-1', taskId: task.id, stageId: 2, taskTitle: task.title, text: '短い', feedback: revise }, storage);
+		let state = loadLearningState(storage);
+		expect(state.submissions).toHaveLength(1);
+		expect(state.problemHistory[0].submittedAt).toBeNull();
+		expect(state.drafts[task.id].text).toBe('短い');
+		const pass = createMockFeedback('私は、公共の場にはだれもが使いやすいデザインが必要だと思います。', 2, task.features?.skillTargets);
+		recordSubmission({ requestId: 'revision-2', taskId: task.id, stageId: 2, taskTitle: task.title, text: '修正した本文です。', feedback: pass }, storage);
+		state = loadLearningState(storage);
+		expect(state.submissions).toHaveLength(2);
+		expect(state.problemHistory[0].submittedAt).not.toBeNull();
+		expect(state.drafts[task.id]).toBeUndefined();
+		expect(state.progress.phasePasses).toBe(1);
 	});
 
 	it('提出結果から技能別習熟度を更新する', () => {

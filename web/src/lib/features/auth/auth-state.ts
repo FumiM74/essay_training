@@ -39,7 +39,7 @@ export async function signUp(email: string, password: string, displayName: strin
 	const { error } = await requireSupabase().auth.signUp({
 		email,
 		password,
-		options: { data: { display_name: displayName }, emailRedirectTo: `${window.location.origin}/account` }
+		options: { data: { display_name: displayName }, emailRedirectTo: `${window.location.origin}/login` }
 	});
 	return error?.message ?? null;
 }

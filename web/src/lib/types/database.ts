@@ -12,7 +12,7 @@ export type Database = {
 	public: {
 		Tables: {
 			problem_history: {
-				Row: { learner_id: string; task_key: string; problem_id: string | null; stage_id: number; task_title: string; prompt: string; hint: string; feature_signature: Json; prompt_hash: string; design_version: string; generation_source: string; issued_at: string; submitted_at: string | null };
+				Row: { learner_id: string; task_key: string; problem_id: string | null; stage_id: number; task_title: string; prompt: string; hint: string; feature_signature: Json; prompt_hash: string; design_version: string; generation_source: string; learning_phase: string; issued_at: string; submitted_at: string | null };
 				Insert: never;
 				Update: never;
 				Relationships: Relationship[];
@@ -31,6 +31,12 @@ export type Database = {
 			};
 			learner_skill_stats: {
 				Row: { learner_id: string; stage_id: number; skill_key: string; attempts: number; achieved_count: number; partial_count: number; missed_count: number; mastery_score: number; last_outcome: string; last_practiced_at: string; updated_at: string };
+				Insert: never;
+				Update: never;
+				Relationships: Relationship[];
+			};
+			ai_request_jobs: {
+				Row: { learner_id: string; operation: string; request_id: string; request_hash: string; status: string; model: string; estimated_input_tokens: number; requested_output_tokens: number; result: Json | null; error_code: string | null; created_at: string; updated_at: string };
 				Insert: never;
 				Update: never;
 				Relationships: Relationship[];
@@ -54,7 +60,7 @@ export type Database = {
 				Relationships: Relationship[];
 			};
 			submissions: {
-				Row: { id: string; learner_id: string; task_key: string; request_id: string; stage_id: number; task_title: string; body: string; rubric_version_id: string | null; instruction_version_id: string | null; submitted_at: string };
+				Row: { id: string; learner_id: string; task_key: string; request_id: string; stage_id: number; task_title: string; body: string; learning_phase: string; rubric_version_id: string | null; instruction_version_id: string | null; submitted_at: string };
 				Insert: never;
 				Update: never;
 				Relationships: Relationship[];
@@ -66,9 +72,9 @@ export type Database = {
 				Relationships: Relationship[];
 			};
 			learning_progress: {
-				Row: { learner_id: string; current_stage_id: number; highest_unlocked_stage_id: number; consecutive_passes: number; required_consecutive_passes: number; individual_instruction: string | null; completed_at: string | null; updated_at: string };
-				Insert: { learner_id: string; current_stage_id?: number; highest_unlocked_stage_id?: number; consecutive_passes?: number; required_consecutive_passes?: number; individual_instruction?: string | null; completed_at?: string | null; updated_at?: string };
-				Update: { required_consecutive_passes?: number };
+				Row: { learner_id: string; current_stage_id: number; highest_unlocked_stage_id: number; learning_phase: string; phase_passes: number; phase_attempts: number; required_training_passes: number; promotion_test_question_count: number; required_retraining_passes: number; individual_instruction: string | null; completed_at: string | null; updated_at: string };
+				Insert: { learner_id: string; current_stage_id?: number; highest_unlocked_stage_id?: number; learning_phase?: string; phase_passes?: number; phase_attempts?: number; required_training_passes?: number; promotion_test_question_count?: number; required_retraining_passes?: number; individual_instruction?: string | null; completed_at?: string | null; updated_at?: string };
+				Update: { required_training_passes?: number; promotion_test_question_count?: number; required_retraining_passes?: number };
 				Relationships: Relationship[];
 			};
 		};
@@ -80,10 +86,6 @@ export type Database = {
 			};
 			select_learning_stage: {
 				Args: { p_stage_id: number };
-				Returns: Json;
-			};
-			submit_mock: {
-				Args: { p_request_id: string; p_task_key: string; p_stage_id: number; p_task_title: string; p_body: string; p_feedback: Json };
 				Returns: Json;
 			};
 		};

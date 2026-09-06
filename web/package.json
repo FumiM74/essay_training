@@ -19,14 +19,18 @@
 		"verify": "pnpm curriculum:build && pnpm check && pnpm test && pnpm build",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"cf:whoami": "wrangler whoami",
+		"cf:preview": "pnpm build && wrangler dev",
+		"cf:deploy": "pnpm build && wrangler deploy",
 		"supabase": "supabase --workdir ..",
 		"db:status": "supabase --workdir .. migration list",
 		"db:push:dry": "supabase --workdir .. db push --dry-run",
 		"db:test:rls": "supabase --workdir .. db query --linked --file supabase/tests/learner_data_rls.sql",
+		"db:test:claude": "supabase --workdir .. db query --linked --file supabase/tests/claude_feedback_security.sql",
 		"db:security": "supabase --workdir .. db advisors --linked --type security"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.1",
+		"@sveltejs/adapter-cloudflare": "^7.2.9",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"exceljs": "^4.4.0",
@@ -36,7 +40,8 @@
 		"svelte-check": "^4.6.0",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
-		"vitest": "^4.1.11"
+		"vitest": "^4.1.11",
+		"wrangler": "^4.128.0"
 	},
 	"dependencies": {
 		"@supabase/supabase-js": "^2.112.3"

@@ -1,5 +1,5 @@
 import type { SkillResult } from '$lib/types/contracts';
-import { SKILL_KEYS, type SkillKey } from '$lib/types/curriculum';
+import { MAX_STAGE_ID, SKILL_KEYS, type SkillKey } from '$lib/types/curriculum';
 import type { LearnerSkillStat } from '$lib/types/learning';
 import { skillStatKey } from './learning-design';
 
@@ -54,7 +54,7 @@ export function isLearnerSkillStats(value: unknown): value is Record<string, Lea
 	return Object.values(value as Record<string, unknown>).every((item) => {
 		if (!item || typeof item !== 'object') return false;
 		const stat = item as Partial<LearnerSkillStat>;
-		return Number.isInteger(stat.stageId) && Number(stat.stageId) >= 1 && Number(stat.stageId) <= 13
+		return Number.isInteger(stat.stageId) && Number(stat.stageId) >= 1 && Number(stat.stageId) <= MAX_STAGE_ID
 			&& typeof stat.skillKey === 'string' && (SKILL_KEYS as readonly string[]).includes(stat.skillKey)
 			&& Number.isInteger(stat.attempts) && Number(stat.attempts) >= 1
 			&& Number.isInteger(stat.achievedCount) && Number(stat.achievedCount) >= 0

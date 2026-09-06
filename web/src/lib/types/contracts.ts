@@ -30,4 +30,13 @@ export type FeedbackResult = {
 	decision: FeedbackDecision;
 	priorityFeedback: Array<{ title: string; guidance: string }>;
 	skillResults: SkillResult[];
+	basicQuestionResults?: Array<{
+		questionId: string;
+		instruction: string;
+		prompt: string;
+		answer: string;
+		correct: boolean;
+		answerLabel: string;
+		explanation: string;
+	}>;
 };

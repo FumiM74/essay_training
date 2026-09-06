@@ -1,7 +1,7 @@
 {
 	"name": "文章の型トレーニング",
 	"short_name": "文章の型",
-	"description": "小論文の文章の型を13段階で練習するアプリ",
+	"description": "小論文の文章の型を14段階で練習するアプリ",
 	"start_url": "/",
 	"display": "standalone",
 	"background_color": "#f6f3eb",
