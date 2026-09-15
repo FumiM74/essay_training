@@ -5,6 +5,7 @@ import type { LearningProgress, LocalLearningState, ProblemHistoryRecord, Submis
 import { createProblemFeatures, isProblemFeatureSignature, practiceTaskPromptHash, promptHash, resolvePracticeTask } from './problem-generator';
 import { applySubmissionToProgress, defaultLearningProgress, deriveProgress, isLearningPhase, isValidRequiredPasses, selectLearningStage } from './progression';
 import { isLearnerSkillStats, updateSkillStats } from './mastery';
+import { isTopicSelectionMode, normalizeCustomTopics } from './topic-preferences';
 
 const STORAGE_KEY = 'essay-training-local-state-v5';
 const VERSION_4_STORAGE_KEY = 'essay-training-local-state-v4';
@@ -30,9 +31,17 @@ function validProgress(value: unknown): value is LearningProgress {
 		&& isLearningPhase(progress.phase)
 		&& Number.isInteger(progress.phasePasses) && Number(progress.phasePasses) >= 0
 		&& Number.isInteger(progress.phaseAttempts) && Number(progress.phaseAttempts) >= 0
+		&& isLearningPhase(progress.frontierPhase)
+		&& Number.isInteger(progress.frontierPhasePasses) && Number(progress.frontierPhasePasses) >= 0
+		&& Number.isInteger(progress.frontierPhaseAttempts) && Number(progress.frontierPhaseAttempts) >= 0
 		&& isValidRequiredPasses(Number(progress.requiredTrainingPasses))
 		&& isValidRequiredPasses(Number(progress.promotionTestQuestionCount))
 		&& isValidRequiredPasses(Number(progress.requiredRetrainingPasses))
+		&& typeof progress.easyFeedbackEnabled === 'boolean'
+		&& isTopicSelectionMode(progress.topicSelectionMode)
+		&& Array.isArray(progress.customTopics)
+		&& (() => { try { return normalizeCustomTopics(progress.customTopics).length === progress.customTopics.length; } catch { return false; } })()
+		&& (progress.topicSelectionMode === 'random' || progress.customTopics.length > 0)
 		&& (progress.courseCompletedAt === null || typeof progress.courseCompletedAt === 'string');
 }
 
@@ -69,6 +78,8 @@ function migrateProgress(progress: unknown, submissions: SubmissionRecord[]): Le
 		const legacy = old as Partial<LearningProgress> & { requiredConsecutivePasses?: number; consecutivePasses?: number };
 		const required = Number(legacy.requiredTrainingPasses ?? legacy.requiredConsecutivePasses);
 		const consecutive = Number(legacy.phasePasses ?? legacy.consecutivePasses);
+		let customTopics: string[] = [];
+		try { customTopics = Array.isArray(legacy.customTopics) ? normalizeCustomTopics(legacy.customTopics) : []; } catch { customTopics = []; }
 		if (Number.isInteger(currentStageId) && currentStageId >= 1 && currentStageId <= MAX_STAGE_ID && isValidRequiredPasses(required) && Number.isInteger(consecutive) && consecutive >= 0) {
 			const highestUnlockedStageId = old.courseCompletedAt
 				? MAX_STAGE_ID
@@ -79,9 +90,15 @@ function migrateProgress(progress: unknown, submissions: SubmissionRecord[]): Le
 				phase: legacy.phase === 'retraining' ? 'promotion_test' : isLearningPhase(legacy.phase) ? legacy.phase : 'training',
 				phasePasses: consecutive,
 				phaseAttempts: Number.isInteger(legacy.phaseAttempts) ? Number(legacy.phaseAttempts) : 0,
+				frontierPhase: isLearningPhase(legacy.frontierPhase) ? legacy.frontierPhase : legacy.phase === 'retraining' ? 'promotion_test' : isLearningPhase(legacy.phase) ? legacy.phase : 'training',
+				frontierPhasePasses: Number.isInteger(legacy.frontierPhasePasses) ? Number(legacy.frontierPhasePasses) : consecutive,
+				frontierPhaseAttempts: Number.isInteger(legacy.frontierPhaseAttempts) ? Number(legacy.frontierPhaseAttempts) : Number.isInteger(legacy.phaseAttempts) ? Number(legacy.phaseAttempts) : 0,
 				requiredTrainingPasses: required,
 				promotionTestQuestionCount: isValidRequiredPasses(Number(legacy.promotionTestQuestionCount)) ? Number(legacy.promotionTestQuestionCount) : 3,
 				requiredRetrainingPasses: isValidRequiredPasses(Number(legacy.requiredRetrainingPasses)) ? Number(legacy.requiredRetrainingPasses) : 3,
+				easyFeedbackEnabled: legacy.easyFeedbackEnabled === true,
+				topicSelectionMode: legacy.topicSelectionMode === 'custom' && customTopics.length > 0 ? 'custom' : 'random',
+				customTopics,
 				courseCompletedAt: typeof old.courseCompletedAt === 'string' ? old.courseCompletedAt : null,
 			};
 		}
@@ -145,7 +162,7 @@ export function parseLearningState(raw: string | null): LocalLearningState {
 		if (parsed.version === 5 && validProgress(parsed.progress)) {
 			return { version: 5, drafts: parsed.drafts, submissions: parsed.submissions, problemHistory: validProblemHistory(parsed.problemHistory) ? parsed.problemHistory : migrateProblemHistory(parsed.problemHistory, parsed.submissions), skillStats: isLearnerSkillStats(parsed.skillStats) ? parsed.skillStats : skillStatsFromSubmissions(parsed.submissions), progress: parsed.progress.phase === 'retraining' ? { ...parsed.progress, phase: 'promotion_test', phasePasses: 0, phaseAttempts: 0 } : parsed.progress };
 		}
-		if ([1, 2, 3, 4].includes(Number(parsed.version))) {
+		if ([1, 2, 3, 4, 5].includes(Number(parsed.version))) {
 			const submissions = parsed.submissions.map((item) => ({ ...item, phase: isLearningPhase(item.phase) ? item.phase : 'training' }));
 			return { version: 5, drafts: parsed.drafts, submissions, problemHistory: migrateProblemHistory(parsed.problemHistory, submissions), skillStats: skillStatsFromSubmissions(submissions), progress: migrateProgress(parsed.progress, submissions) };
 		}
@@ -239,6 +256,22 @@ export function saveProgressionSettings(settings: Pick<LearningProgress, 'requir
 	if (!Object.values(settings).every(isValidRequiredPasses)) throw new Error('各回数は1〜10回で指定してください。');
 	const state = loadLearningState(storage);
 	state.progress = { ...state.progress, ...settings };
+	writeLearningState(state, storage);
+	return state.progress;
+}
+
+export function saveFeedbackPreference(enabled: boolean, storage?: StorageLike | null): LearningProgress {
+	const state = loadLearningState(storage);
+	state.progress = { ...state.progress, easyFeedbackEnabled: enabled };
+	writeLearningState(state, storage);
+	return state.progress;
+}
+
+export function saveTopicPreference(mode: LearningProgress['topicSelectionMode'], topics: string[], storage?: StorageLike | null): LearningProgress {
+	const customTopics = normalizeCustomTopics(topics);
+	if (!isTopicSelectionMode(mode) || (mode === 'custom' && customTopics.length === 0)) throw new Error('自由設定ではテーマを1つ以上入力してください。');
+	const state = loadLearningState(storage);
+	state.progress = { ...state.progress, topicSelectionMode: mode, customTopics };
 	writeLearningState(state, storage);
 	return state.progress;
 }

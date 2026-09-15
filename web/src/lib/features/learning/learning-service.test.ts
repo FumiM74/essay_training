@@ -20,11 +20,17 @@ describe('parseFeedback', () => {
 	});
 
 	it('不完全または矛盾した結果を拒否する', () => {
-		expect(() => parseFeedback({ decision: 'pass', priorityFeedback: [] })).toThrow();
+		expect(() => parseFeedback({ ...validFeedback, priorityFeedback: [] })).toThrow();
+		expect(() => parseFeedback({ ...validFeedback, priorityFeedback: Array.from({ length: 6 }, () => ({ title: '構成', guidance: '明確です。' })) })).toThrow();
 		expect(() => parseFeedback({ ...validFeedback, languageStatus: 'revision_required', decision: 'pass' })).toThrow();
 		expect(() => parseFeedback({ ...validFeedback, priorityFeedback: [{ title: '', guidance: 'x' }] })).toThrow();
 		expect(() => parseFeedback({ ...validFeedback, skillResults: [{ skillKey: 'unknown', outcome: 'achieved', severity: 0, evidence: 'x' }] })).toThrow();
 		expect(() => parseFeedback({ ...validFeedback, skillResults: [validFeedback.skillResults[0], validFeedback.skillResults[0]] })).toThrow();
+	});
+
+	it('STEP 1の5問分の解説を受け入れる', () => {
+		const priorityFeedback = Array.from({ length: 5 }, (_, index) => ({ title: `問題${index + 1}`, guidance: '解説です。' }));
+		expect(parseFeedback({ ...validFeedback, priorityFeedback }).priorityFeedback).toHaveLength(5);
 	});
 });
 

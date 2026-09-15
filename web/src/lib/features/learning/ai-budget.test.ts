@@ -24,7 +24,7 @@ describe('AI budget policy', () => {
 		const policy = DEFAULT_AI_BUDGETS.problem_generation;
 		expect(estimateTokensForGuard('日本語の短い問題仕様')).toBeGreaterThan(0);
 		expect(fitsRequestEnvelope('短い仕様', policy.maxOutputTokensPerRequest, policy)).toBe(true);
-		expect(fitsRequestEnvelope('長'.repeat(2000), 100, policy)).toBe(false);
+		expect(fitsRequestEnvelope('長'.repeat(11000), 100, policy)).toBe(false);
 		expect(withinDailyBudget({ requests: 0, inputTokens: policy.dailyInputTokensPerLearner, outputTokens: 0 }, policy)).toBe(false);
 	});
 });

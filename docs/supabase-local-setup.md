@@ -90,3 +90,4 @@ Supabase Dashboardで以下を設定する。
 - Secret key、`service_role` key、DBパスワードをブラウザやこのリポジトリへ入れない。
 - RLSを無効にして動作確認をしない。動かない場合はポリシーを修正する。
 - `submit_mock`は内部の進級トランザクションとして残すが、ブラウザからの実行権限は削除済みである。オンライン提出は認証済みの`feedback` Edge Functionを通し、検証済みClaude添削だけを正式保存する。
+- 問題生成は認証済みの`problem-generation` Edge Functionを通す。固定問題と承認済み問題バンクを優先し、新規生成が必要な場合だけClaudeを呼ぶ。反映時は`web`ディレクトリで`pnpm supabase functions deploy problem-generation --no-verify-jwt`を実行する。`--no-verify-jwt`でも無認証にはならず、関数内でSupabase Authのアクセストークンを検証する。

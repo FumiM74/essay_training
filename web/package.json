@@ -27,6 +27,8 @@
 		"db:push:dry": "supabase --workdir .. db push --dry-run",
 		"db:test:rls": "supabase --workdir .. db query --linked --file supabase/tests/learner_data_rls.sql",
 		"db:test:claude": "supabase --workdir .. db query --linked --file supabase/tests/claude_feedback_security.sql",
+		"db:test:qa": "supabase --workdir .. db query --linked --file supabase/tests/qa_test_harness.sql",
+		"db:test:quality": "supabase --workdir .. db query --linked --file supabase/tests/generated_problem_quality_lifecycle.sql",
 		"db:security": "supabase --workdir .. db advisors --linked --type security"
 	},
 	"devDependencies": {

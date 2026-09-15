@@ -17,9 +17,18 @@ export type SubmissionRecord = {
 	submittedAt: string;
 	feedback: FeedbackResult;
 	phase: LearningPhase;
+	trialOutcome?: TrialOutcome;
+};
+
+export type TrialOutcome = {
+	status: 'active' | 'approved' | 'private_verified' | 'disqualified';
+	revisionCount: number;
+	maxRevisionCount: 5;
+	modelAnswers?: Array<{ label: string; answer: string; explanation: string }>;
 };
 
 export type LearningPhase = 'training' | 'promotion_test' | 'retraining';
+export type TopicSelectionMode = 'random' | 'custom';
 
 export type LearningProgress = {
 	currentStageId: number;
@@ -27,9 +36,15 @@ export type LearningProgress = {
 	phase: LearningPhase;
 	phasePasses: number;
 	phaseAttempts: number;
+	frontierPhase: LearningPhase;
+	frontierPhasePasses: number;
+	frontierPhaseAttempts: number;
 	requiredTrainingPasses: number;
 	promotionTestQuestionCount: number;
 	requiredRetrainingPasses: number;
+	easyFeedbackEnabled: boolean;
+	topicSelectionMode: TopicSelectionMode;
+	customTopics: string[];
 	courseCompletedAt: string | null;
 };
 

@@ -5,6 +5,8 @@ export type RuntimeEnv = {
 	ALLOWED_ORIGINS?: string;
 	CLAUDE_HAIKU_MODEL?: string;
 	CLAUDE_SONNET_MODEL?: string;
+	CLAUDE_PROBLEM_GENERATION_MODEL?: string;
+	CLAUDE_PROBLEM_REVIEW_MODEL?: string;
 };
 
 const defaultOrigins = [
@@ -26,6 +28,8 @@ export function readEnv(): RuntimeEnv {
 		ALLOWED_ORIGINS: Deno.env.get('ALLOWED_ORIGINS'),
 		CLAUDE_HAIKU_MODEL: Deno.env.get('CLAUDE_HAIKU_MODEL'),
 		CLAUDE_SONNET_MODEL: Deno.env.get('CLAUDE_SONNET_MODEL'),
+		CLAUDE_PROBLEM_GENERATION_MODEL: Deno.env.get('CLAUDE_PROBLEM_GENERATION_MODEL'),
+		CLAUDE_PROBLEM_REVIEW_MODEL: Deno.env.get('CLAUDE_PROBLEM_REVIEW_MODEL'),
 	};
 }
 

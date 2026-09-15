@@ -1,19 +1,18 @@
 import type { PracticeTask } from '../src/lib/types/curriculum.ts';
+import { essayTopics as topics, type EssayTopic as Topic } from '../src/lib/data/essay-topic-bank.ts';
 
-type Topic = { key: string; label: string; question: string; claim: string; reason: string; example: string; counter: string };
-
-const topics: Topic[] = [
-	{ key: 'accessible-design', label: '公共施設の使いやすさ', question: '公共施設の設計では使いやすさを最優先するべきか', claim: '公共施設には、だれもが利用しやすい設計が必要だ', reason: '利用上の障壁が減れば、より多くの人が社会参加できるからだ', example: '段差のない入口は、高齢者や子ども連れにも役立つ', counter: '設備の改修には費用がかかるため、優先順位を慎重に決めるべきだという意見もある' },
-	{ key: 'school-reading', label: '学校での読書時間', question: '学校は毎日読書の時間を設けるべきか', claim: '学校では継続的な読書時間を確保するべきだ', reason: '家庭環境に左右されず、文章に触れる機会を持てるからだ', example: '毎朝十分間の読書を続ければ、すべての生徒が文章に触れられる', counter: '授業時間が限られているため、読書は家庭に任せるべきだという意見もある' },
-	{ key: 'smartphone-rules', label: 'スマートフォンの利用規則', question: '中学生のスマートフォン利用にはルールが必要か', claim: '中学生のスマートフォン利用には、話し合って決めたルールが必要だ', reason: '長時間利用による睡眠不足を抑えられるからだ', example: '就寝前は端末を共用スペースに置くと、夜間の利用を減らしやすい', counter: '一律の制限より、本人が自己管理を学ぶ機会を重視すべきだという意見もある' },
-	{ key: 'community-events', label: '地域行事への参加', question: '学校は生徒の地域行事への参加を促すべきか', claim: '若者が地域行事に参加しやすい仕組みを作るべきだ', reason: '世代を越えた交流が生まれるからだ', example: '祭りの運営を手伝うことで、地域の人と顔の見える関係ができる', counter: '休日の活動を強く求めると、生徒の負担になるという懸念もある' },
-	{ key: 'public-transport', label: '公共交通', question: '自治体は公共交通の利用を優先して支援するべきか', claim: '地域では公共交通を利用しやすくするべきだ', reason: '交通手段を持たない人の移動を支えられるからだ', example: '利用の多い時間帯に便数を増やせば、通学や通院で選びやすくなる', counter: '利用者が少ない地域では、路線維持の費用が大きいという課題もある' },
-	{ key: 'learning-from-failure', label: '失敗から学ぶ姿勢', question: '学校では失敗の過程も評価するべきか', claim: '学習では失敗の原因を振り返る時間を重視するべきだ', reason: '間違い方を理解すると、次の方法を具体的に変えられるからだ', example: '計算ミスの原因を記録すると、同じ確認不足を減らしやすい', counter: '失敗の分析に時間をかけすぎると、新しい内容へ進みにくいという意見もある' },
-	{ key: 'collaborative-learning', label: '協働学習', question: '学校で協働学習の時間を増やすべきか', claim: '学校では目的を明確にした協働学習を取り入れるべきだ', reason: '異なる考えを説明し合うと、自分の理解不足に気づけるからだ', example: '解き方を比較すれば、一つの問題にも複数の考え方があると分かる', counter: '役割が偏ると、一部の生徒だけが作業するという問題もある' },
-	{ key: 'online-learning', label: 'オンライン学習', question: '学校教育でオンライン学習を活用するべきか', claim: '学校は対面授業を補う手段としてオンライン学習を活用するべきだ', reason: '自分の理解度に合わせて復習できるからだ', example: '欠席した生徒が解説動画を見れば、授業内容を後から確認できる', counter: '端末環境の差が、学習格差を広げるおそれもある' },
-	{ key: 'school-uniforms', label: '学校制服', question: '学校に制服は必要か', claim: '制服は学校生活の選択肢として維持する価値がある', reason: '毎日の服装選びの負担を減らせるからだ', example: '気候に合わせて複数の型から選べれば、統一感と快適さを両立できる', counter: '購入費用や表現の制限から、私服を選べるようにすべきだという意見もある' },
-	{ key: 'generative-ai', label: '生成AIと学校教育', question: '学校の学習で生成AIの利用を認めるべきか', claim: '利用目的と確認方法を教えたうえで生成AIを活用するべきだ', reason: '質問や推敲を補助しながら、出力を確かめる力も学べるからだ', example: 'AIの回答と教科書を比較すれば、誤りや根拠不足を見つける練習になる', counter: '自力で考える前に答えを得ると、考える機会が減るという懸念もある' },
-];
+const stageSevenOrders = [
+	['counter', 'claim', 'reason', 'example', 'distractor', 'conclusion'],
+	['claim', 'counter', 'reason', 'distractor', 'example', 'conclusion'],
+	['example', 'claim', 'counter', 'reason', 'conclusion', 'distractor'],
+	['example', 'counter', 'claim', 'reason', 'distractor', 'conclusion'],
+	['counter', 'example', 'claim', 'reason', 'distractor', 'conclusion'],
+	['reason', 'claim', 'example', 'distractor', 'counter', 'conclusion'],
+	['counter', 'claim', 'reason', 'example', 'conclusion', 'distractor'],
+	['example', 'claim', 'reason', 'counter', 'distractor', 'conclusion'],
+	['claim', 'counter', 'reason', 'example', 'distractor', 'conclusion'],
+	['claim', 'counter', 'reason', 'distractor', 'example', 'conclusion'],
+] as const satisfies ReadonlyArray<ReadonlyArray<keyof Pick<Topic, 'counter' | 'claim' | 'reason' | 'example' | 'distractor' | 'conclusion'>>>;
 
 const hints: Record<number, string> = {
 	1: '5問は、主語と述語、助詞、文末、語順、文の完成を一つずつ確認します。問題文をよく読み、すべてに解答してください。',
@@ -22,19 +21,19 @@ const hints: Record<number, string> = {
 	4: '一文目に自分の意見、二文目にその理由を書きましょう。理由は意見の言い換えではなく、「なぜそう考えるのか」が分かる内容にしてください。',
 	5: '理由によって何が起こり、どのような結果になるのかを順番に書きましょう。「便利だから」「大切だから」だけで終わらせず、理由を具体的に説明してください。',
 	6: '一文目に主張、二文目に理由、三文目に具体例を書きましょう。具体例は、二文目の理由が実際に当てはまる場面を選んでください。',
-	7: 'まず、文①〜④が「反対意見・主張・理由・具体例」のどれかを書きます。次に、関係のない文の番号を書きます。最後に、必要な説明を一文補い、読みやすい順序に直した段落を書いてください。',
+	7: '最初に、主張・理由・具体例・反対意見または課題と、関係のない文を見分けます。次に、反対意見や課題に答える一文を自分で加えます。最後に、結論まで考えがつながる順序へ並べてください。',
 	8: '主張、理由、具体例、結論が自然につながる一段落を書きましょう。項目名は書かず、読み手が流れをたどれる文章にしてください。',
-	9: '筆者の主張と重要な理由を残し、短くまとめましょう。「私は」などの自分の意見や、細かな具体例は加えないでください。',
-	10: '課題文のどの内容に注目したかを示し、自分の意見と理由を書きましょう。課題文と自分の意見のつながりを説明してください。',
+	9: '筆者の主張、主な理由、反対の立場や課題を残して短くまとめましょう。細かな具体例や、「私は」などの自分の意見は加えないでください。',
+	10: '意見文の理由・具体例・反対意見のどれに注目したかを示し、それと自分の意見がどうつながるかを説明してください。',
 	11: '反対の立場を正確に説明し、納得できる点を認めたうえで、それでも自分の意見を選ぶ理由を書いてください。',
-	12: '書き始める前に、主張、理由、具体例、反対意見への答え、結論を短い言葉で整理してください。',
-	13: '構成メモに沿って、主張、理由、具体例、結論がつながる複数段落の文章を書いてください。',
-	14: '設問への答えを最初に示し、理由・具体例・別の立場を使って説明しましょう。最後の結論は、設問への答えに戻してください。',
+	12: '主張、理由、具体例、反対意見とそれへの答え、結論を短い言葉で整理してください。結論は最初の主張と同じ方向にそろえましょう。',
+	13: '書き始める前に、主張・理由・具体例・結論の順序を考え、それに沿って複数段落で書いてください。',
+	14: '最初に設問への答えを示します。次に、資料のどの内容を使うかを明らかにし、自分の理由・具体例・別の立場への応答を書きましょう。最後は設問への答えに戻ってください。',
 };
 
 function passage(topic: Topic): string { return `${topic.claim}。${topic.reason}。${topic.example}。一方、${topic.counter}。`; }
 
-function promptFor(stageId: number, topic: Topic): string {
+function promptFor(stageId: number, topic: Topic, topicIndex: number): string {
 	switch (stageId) {
 		case 1: return '文を正しく組み立てるための基礎問題5問に解答してください。';
 		case 2: return '情報の関係と読みやすさを考え、一文を組み立てる3問に解答してください。';
@@ -42,19 +41,25 @@ function promptFor(stageId: number, topic: Topic): string {
 		case 4: return `「${topic.question}」について、二文で書いてください。\n\n一文目：あなたの意見\n二文目：その理由`;
 		case 5: return `「${topic.claim}」という意見を支える理由を書いてください。\n\n「何が起こり、その結果どうなるのか」が分かるように説明してください。`;
 		case 6: return `「${topic.claim}」という意見について、三文で書いてください。\n\n一文目：意見\n二文目：理由\n三文目：理由を裏付ける具体例`;
-		case 7: return `次の6文を読み、三つの作業をしてください。\n1．文①〜④が「反対意見・主張・理由・具体例」のどれに当たるかを書いてください。\n2．段落の内容と関係のない文を、番号で答えてください。\n3．必要な説明を一文補い、内容が自然につながる順序に直した段落を書いてください。\n\n①${topic.counter}。\n②${topic.claim}。\n③${topic.reason}。\n④${topic.example}。\n⑤昨年、地域の図書館は入口を改修した。\n⑥このため、この課題について具体的な行動を進める必要がある。`;
+		case 7: {
+			const circledNumbers = ['①', '②', '③', '④', '⑤', '⑥'];
+			const order = stageSevenOrders[topicIndex % stageSevenOrders.length];
+			const sentences = order.map((key, index) => `${circledNumbers[index]}${topic[key]}。`).join('\n');
+			return `次の6文を読み、三つの作業をしてください。\n1．「主張・理由・具体例・反対意見または課題」に当たる文を、それぞれ番号で答えてください。\n2．話題と関係のない文を一つ選び、番号で答えてください。\n3．反対意見または課題に答える一文を補い、関係のない文を除いた5文と合わせて、自然な順序の段落に直してください。\n\n${sentences}`;
+		}
 		case 8: return `「${topic.question}」について、一段落を書いてください。\n\n主張 → 理由 → 具体例 → 結論の順に、自然につながる文章にしてください。`;
-		case 9: return `次の文章を要約してください。筆者の主張と重要な理由を残し、あなた自身の意見は書かないでください。\n\n${passage(topic)}`;
-		case 10: return `次の文章の内容を一つ以上取り上げ、それを根拠として「${topic.question}」についてあなたの意見を書いてください。\n\n${passage(topic)}`;
+		case 9: return `次の意見文を要約してください。筆者の主張、主な理由、反対の立場または課題を残してください。細かな具体例と、あなた自身の意見は書かないでください。\n\n${passage(topic)}`;
+		case 10: return `次の意見文を読み、文中の「理由・具体例・反対意見」のうち一つ以上に触れて、「${topic.question}」についてあなたの意見を書いてください。筆者の意見に賛成でも反対でも構いません。\n\n${passage(topic)}`;
 		case 11: return `「${topic.question}」について、次の順に書いてください。\n\n①あなたの意見\n②反対の立場と、納得できる点\n③それでもあなたの意見を選ぶ理由`;
-		case 12: return `「${topic.question}」について、小論文を書く前の構成メモを作ってください。\n\n「主張」\n「理由」\n「具体例」\n「反対意見への答え」\n「結論」\n\nの五項目に分けて書いてください。`;
+		case 12: return `「${topic.question}」について、小論文を書く前の構成メモを作ってください。\n\n「主張」\n「理由」\n「具体例」\n「反対意見と、それへの答え」\n「結論」\n\nの五項目に分けて書いてください。`;
 		case 13: return `「${topic.question}」について、主張・理由・具体例・結論が一貫する、複数段落の短い小論文を書いてください。`;
-		case 14: return `次の文章を踏まえ、「${topic.question}」について、理由・具体例・反対の立場への応答を含む小論文を書いてください。最後に、設問への答えとなる結論を書いてください。\n\n${passage(topic)}`;
+		case 14: return `次の意見文を資料として読み、「${topic.question}」について小論文を書いてください。資料中の内容を一つ以上取り上げ、あなた自身の意見・理由・具体例・反対の立場への応答を含めてください。資料の意見に賛成でも反対でも構いません。最後に、設問への答えとなる結論を書いてください。\n\n${passage(topic)}`;
 		default: throw new Error(`練習課題を生成できない段階です: ${stageId}`);
 	}
 }
 
 export function buildPracticeTasks(stageId: number, stageName: string): PracticeTask[] {
 	if (stageId < 1 || stageId > 14) return [];
-	return topics.map((topic, index) => ({ id: `stage-${stageId}-practice-${index + 1}`, stageId, topicKey: topic.key, title: `${stageName}：${stageId === 1 ? `基礎問題セット${index + 1}` : topic.label}`, prompt: promptFor(stageId, topic), hint: hints[stageId] }));
+	const stageTopics = stageId <= 3 ? topics.slice(0, 10) : topics;
+	return stageTopics.map((topic, index) => ({ id: `stage-${stageId}-practice-${index + 1}`, stageId, topicKey: topic.key, title: `${stageName}：${stageId === 1 ? `基礎問題セット${index + 1}` : topic.label}`, prompt: promptFor(stageId, topic, index), hint: hints[stageId] }));
 }

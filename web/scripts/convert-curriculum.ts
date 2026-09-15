@@ -18,14 +18,14 @@ const stageBlueprints = [
 	{ id: 4, name: '意見と理由を書く', purpose: '問いへの答えと理由を結び付ける', learnerAction: '自分の意見と、その理由を二文で書きます。', passSummary: '意見が明確で、理由がその意見を説明していれば合格です。', progression: '意見と理由の二文を完成させること', notes: '' },
 	{ id: 5, name: '理由を深める', purpose: '理由の因果関係を説明する', learnerAction: '理由によって何が起こり、どのような結果になるかを書きます。', passSummary: '原因から結果までのつながりが説明されていれば合格です。', progression: '理由を一段深く説明すること', notes: '' },
 	{ id: 6, name: '具体例で理由を支える', purpose: '理由に合う具体例を示す', learnerAction: '意見と理由に合う具体例を加えます。', passSummary: '具体例が理由を実際に示す内容なら合格です。', progression: '理由と具体例の対応を示すこと', notes: '' },
-	{ id: 7, name: '段落を分析して直す', purpose: '段落の構造と論理上の問題を発見・修正する', learnerAction: '6〜8文の段落から各文の役割を見分け、不要文・順序・論理の飛躍を直します。', passSummary: '役割の判別、不要文の削除、並べ替え、不足説明の補完ができれば合格です。', progression: '分析と修正を一つの課題で行うこと', notes: '単純な役割分類だけでは合格にしない' },
+	{ id: 7, name: '段落を分析して直す', purpose: '段落の構造と論理上の問題を発見・修正する', learnerAction: '6文の役割を見分け、不要な文を除き、反対意見や課題への答えを補って段落を直します。', passSummary: '文の役割を見分け、不要文を除き、反対意見や課題への答えを補って自然な段落にできれば合格です。', progression: '分析と修正を一つの課題で行うこと', notes: '単純な役割分類だけでは合格にしない' },
 	{ id: 8, name: '段落を組み立てる', purpose: '一段落を自力で構成する', learnerAction: '主張・理由・具体例・結論がつながる段落を書きます。', passSummary: '一段落が同じ主張を支え、結論までつながれば合格です。', progression: '役割名の誘導なしで段落を書くこと', notes: '' },
-	{ id: 9, name: '要約する', purpose: '重要な内容を保って短くする', learnerAction: '筆者の主張と重要な理由を残し、自分の意見を加えずにまとめます。', passSummary: '元の主張を変えず、重要点を残していれば合格です。', progression: '客観的に要約すること', notes: '' },
+	{ id: 9, name: '要約する', purpose: '重要な内容を保って短くする', learnerAction: '筆者の主張、主な理由、反対の立場や課題を残し、自分の意見を加えずにまとめます。', passSummary: '筆者の主張、主な理由、反対の立場や課題を残し、細かな具体例と自分の意見を加えていなければ合格です。', progression: '客観的に要約すること', notes: '' },
 	{ id: 10, name: '資料を使って意見を書く', purpose: '資料と自分の意見を結び付ける', learnerAction: '資料の内容を根拠として、自分の意見を書きます。', passSummary: '資料のどの内容を根拠にしたかが分かれば合格です。', progression: '資料に基づく意見を書くこと', notes: '' },
 	{ id: 11, name: '別の立場を扱う', purpose: '反対意見を公平に扱い応答する', learnerAction: '反対の立場を正確に示し、それでも自分の意見を選ぶ理由を書きます。', passSummary: '反対意見を弱めずに示し、応答できていれば合格です。', progression: '複数の立場を扱うこと', notes: '' },
-	{ id: 12, name: '構成メモを作る', purpose: '書く前に小論文全体を設計する', learnerAction: '主張・理由・具体例・反対意見への答え・結論を整理します。', passSummary: '各項目が同じ設問への答えを支えていれば合格です。', progression: '文章を書く前の構成を完成させること', notes: '' },
+	{ id: 12, name: '構成メモを作る', purpose: '書く前に小論文全体を設計する', learnerAction: '主張・理由・具体例・反対意見とそれへの答え・結論を整理します。', passSummary: '五項目が同じ設問への答えを支え、反対意見とそれへの答えの関係が分かれば合格です。', progression: '文章を書く前の構成を完成させること', notes: '' },
 	{ id: 13, name: 'ミニ小論文を書く', purpose: '構成に沿って複数段落を書く', learnerAction: '構成メモを意識し、短い小論文を書きます。', passSummary: '主張、根拠、結論が複数段落で一貫していれば合格です。', progression: '短い小論文を完成させること', notes: '' },
-	{ id: 14, name: '本番形式の小論文を書く', purpose: '課題分析から推敲まで統合する', learnerAction: '資料を読み、構成を考え、複数の立場を扱う小論文を書きます。', passSummary: '設問に答え、根拠と別の立場を扱い、結論まで一貫すれば合格です。', progression: '本番形式の課題を完成させること', notes: '' },
+	{ id: 14, name: '本番形式の小論文を書く', purpose: '課題分析から推敲まで統合する', learnerAction: '資料を読み、資料の内容と自分の考えを使って、別の立場にも答える小論文を書きます。', passSummary: '設問に答え、資料の内容、自分の理由と具体例、別の立場への応答、結論が一貫していれば合格です。', progression: '本番形式の課題を完成させること', notes: '' },
 ] satisfies Array<Omit<CurriculumStage, 'rubric' | 'tasks'>>;
 
 function cellText(value: ExcelJS.CellValue): string {

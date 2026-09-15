@@ -2,6 +2,7 @@ import { MAX_STAGE_ID, TOTAL_STAGE_COUNT, type PracticeTask, type ProblemFeature
 import type { FeedbackDecision } from '$lib/types/contracts';
 import type { LearningPhase, LearningProgress, LocalLearningState, SubmissionRecord } from '$lib/types/learning';
 import { generatePracticeTask, generatedTaskSeed, historyTask, practiceTaskPromptHash, promptSimilarity } from './problem-generator';
+import { customTopicKey } from './topic-preferences';
 import { getStageProblemDesign, selectionReasonForAttempt } from './learning-design';
 import { weakestSkillsForStage } from './mastery';
 
@@ -18,9 +19,15 @@ export function defaultLearningProgress(): LearningProgress {
 		phase: 'training',
 		phasePasses: 0,
 		phaseAttempts: 0,
+		frontierPhase: 'training',
+		frontierPhasePasses: 0,
+		frontierPhaseAttempts: 0,
 		requiredTrainingPasses: DEFAULT_REQUIRED_TRAINING_PASSES,
 		promotionTestQuestionCount: DEFAULT_PROMOTION_TEST_QUESTIONS,
 		requiredRetrainingPasses: DEFAULT_REQUIRED_RETRAINING_PASSES,
+		easyFeedbackEnabled: false,
+		topicSelectionMode: 'random',
+		customTopics: [],
 		courseCompletedAt: null,
 	};
 }
@@ -65,23 +72,49 @@ export function submissionProgressMessage(before: LearningProgress, after: Learn
 	return `進級テストまであと${remaining}問`;
 }
 
+export function restoredSubmissionProgressMessage(submission: SubmissionRecord, current: LearningProgress): string {
+	const passed = submission.feedback.decision === 'pass';
+	if (passed && submission.stageId === MAX_STAGE_ID && submission.phase === 'promotion_test' && current.courseCompletedAt) {
+		return `段階${MAX_STAGE_ID}の進級テストに合格し、全課程を修了しました。`;
+	}
+	if (passed && current.currentStageId > submission.stageId) return `段階${current.currentStageId}へ進みました。`;
+	if (submission.phase === 'promotion_test') {
+		if (!passed && current.currentStageId === submission.stageId && current.phase === 'retraining') {
+			return '進級テストは不合格でした。次は再トレーニングです。';
+		}
+		const remaining = Math.max(0, current.promotionTestQuestionCount - current.phasePasses);
+		const destination = submission.stageId === MAX_STAGE_ID ? '全課程修了' : '次の段階';
+		return passed
+			? `${destination}まで、進級テストであと${remaining}問合格です。`
+			: `進級テストは不合格でした。合格数は減りません。`;
+	}
+	if (passed && current.currentStageId === submission.stageId && current.phase === 'promotion_test') {
+		return `次の問題から${current.promotionTestQuestionCount}問の進級テストです。`;
+	}
+	return `進級テストまであと${Math.max(0, current.requiredTrainingPasses - current.phasePasses)}問`;
+}
+
 export function applySubmissionToProgress(progress: LearningProgress, submission: SubmissionRecord): LearningProgress {
 	if (submission.stageId !== progress.currentStageId) return progress;
 	if (submission.phase !== progress.phase) return progress;
 	const passed = submission.feedback.decision === 'pass';
+	if (progress.currentStageId < progress.highestUnlockedStageId) {
+		if (!passed || progress.phase === 'promotion_test') return progress;
+		return { ...progress, phasePasses: Math.min(progress.phasePasses + 1, Math.max(0, progress.requiredTrainingPasses - 1)) };
+	}
 	if (progress.phase === 'promotion_test') {
 		const passedQuestions = progress.phasePasses + (passed ? 1 : 0);
 		const attempts = progress.phaseAttempts + 1;
-		if (passedQuestions < progress.promotionTestQuestionCount) return { ...progress, phasePasses: passedQuestions, phaseAttempts: attempts };
-		if (progress.currentStageId === MAX_STAGE_ID) return { ...progress, highestUnlockedStageId: MAX_STAGE_ID, phase: 'training', phasePasses: 0, phaseAttempts: 0, courseCompletedAt: progress.courseCompletedAt ?? submission.submittedAt };
+		if (passedQuestions < progress.promotionTestQuestionCount) return { ...progress, phasePasses: passedQuestions, phaseAttempts: attempts, frontierPhase: 'promotion_test', frontierPhasePasses: passedQuestions, frontierPhaseAttempts: attempts };
+		if (progress.currentStageId === MAX_STAGE_ID) return { ...progress, highestUnlockedStageId: MAX_STAGE_ID, phase: 'training', phasePasses: 0, phaseAttempts: 0, frontierPhase: 'training', frontierPhasePasses: 0, frontierPhaseAttempts: 0, courseCompletedAt: progress.courseCompletedAt ?? submission.submittedAt };
 		const nextStage = progress.currentStageId + 1;
-		return { ...progress, currentStageId: nextStage, highestUnlockedStageId: Math.max(progress.highestUnlockedStageId, nextStage), phase: 'training', phasePasses: 0, phaseAttempts: 0 };
+		return { ...progress, currentStageId: nextStage, highestUnlockedStageId: Math.max(progress.highestUnlockedStageId, nextStage), phase: 'training', phasePasses: 0, phaseAttempts: 0, frontierPhase: 'training', frontierPhasePasses: 0, frontierPhaseAttempts: 0 };
 	}
 	if (!passed) return progress;
 	const passes = progress.phasePasses + 1;
 	const target = progress.requiredTrainingPasses;
-	if (passes < target) return { ...progress, phasePasses: passes };
-	return { ...progress, phase: 'promotion_test', phasePasses: 0, phaseAttempts: 0 };
+	if (passes < target) return { ...progress, phasePasses: passes, frontierPhase: 'training', frontierPhasePasses: passes, frontierPhaseAttempts: progress.phaseAttempts };
+	return { ...progress, phase: 'promotion_test', phasePasses: 0, phaseAttempts: 0, frontierPhase: 'promotion_test', frontierPhasePasses: 0, frontierPhaseAttempts: 0 };
 }
 
 export function deriveProgress(submissions: SubmissionRecord[], required = DEFAULT_REQUIRED_TRAINING_PASSES): LearningProgress {
@@ -96,7 +129,13 @@ export function completedStageCount(progress: LearningProgress): number {
 
 export function selectLearningStage(progress: LearningProgress, stageId: number): LearningProgress {
 	if (!Number.isInteger(stageId) || stageId < 1 || stageId > progress.highestUnlockedStageId) throw new Error('未到達の段階は選べません。');
-	return { ...progress, currentStageId: stageId, phase: 'training', phasePasses: 0, phaseAttempts: 0 };
+	const frontier = progress.currentStageId === progress.highestUnlockedStageId
+		? { phase: progress.phase, passes: progress.phasePasses, attempts: progress.phaseAttempts }
+		: { phase: progress.frontierPhase, passes: progress.frontierPhasePasses, attempts: progress.frontierPhaseAttempts };
+	if (stageId === progress.highestUnlockedStageId) {
+		return { ...progress, currentStageId: stageId, phase: frontier.phase, phasePasses: frontier.passes, phaseAttempts: frontier.attempts, frontierPhase: frontier.phase, frontierPhasePasses: frontier.passes, frontierPhaseAttempts: frontier.attempts };
+	}
+	return { ...progress, currentStageId: stageId, phase: 'training', phasePasses: 0, phaseAttempts: 0, frontierPhase: frontier.phase, frontierPhasePasses: frontier.passes, frontierPhaseAttempts: frontier.attempts };
 }
 
 function overlap(left: string[], right: string[]): number {
@@ -152,6 +191,10 @@ export function selectNextPracticeTask(state: LocalLearningState): PracticeTask 
 		: state.progress.phase === 'retraining' && weak.length > 0 ? 'weakness'
 			: selectionReasonForAttempt(completedAttempts, weak.length > 0);
 	const targetSkill = selectedSkill(state, stageId, completedAttempts, selectionReason);
+	const customTopic = stageId >= 4 && state.progress.topicSelectionMode === 'custom'
+		? state.progress.customTopics[completedAttempts % state.progress.customTopics.length]
+		: undefined;
+	const preferredTopicKey = customTopic ? customTopicKey(customTopic) : undefined;
 	const topicUsage = new Map<string, number>();
 	const domainUsage = new Map<string, number>();
 	for (const item of state.problemHistory) {
@@ -162,10 +205,8 @@ export function selectNextPracticeTask(state: LocalLearningState): PracticeTask 
 	let bestBank: PracticeTask | undefined;
 	let bestBankScore = Number.POSITIVE_INFINITY;
 	for (const candidate of state.approvedProblems ?? []) {
-		// Current problem_bank rows do not store per-question snapshots. Set-based
-		// stages are therefore issued from the versioned local generator only.
-		if (stageId <= 3) continue;
 		if (candidate.stageId !== stageId || !candidate.features || !candidate.features.skillTargets.includes(targetSkill)) continue;
+		if (preferredTopicKey ? candidate.features.topicKey !== preferredTopicKey : candidate.features.customTopic !== undefined) continue;
 		if (stageHistory.some((item) => item.taskId === candidate.id) || fingerprints.has(candidate.features.fingerprint)) continue;
 		const candidateHash = practiceTaskPromptHash(candidate);
 		if (promptHashes.has(candidateHash)) continue;
@@ -181,7 +222,7 @@ export function selectNextPracticeTask(state: LocalLearningState): PracticeTask 
 	let best: PracticeTask | undefined;
 	let bestScore = Number.POSITIVE_INFINITY;
 	for (let offset = 0; offset < 160; offset += 1) {
-		const candidate = generatePracticeTask(stageId, startSeed + offset, { selectionReason, targetSkill });
+		const candidate = generatePracticeTask(stageId, startSeed + offset, { selectionReason, targetSkill, customTopic });
 		if (!candidate.features || fingerprints.has(candidate.features.fingerprint)) continue;
 		const candidateHash = practiceTaskPromptHash(candidate);
 		if (promptHashes.has(candidateHash)) continue;

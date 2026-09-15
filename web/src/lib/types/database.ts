@@ -18,7 +18,7 @@ export type Database = {
 				Relationships: Relationship[];
 			};
 			problem_bank: {
-				Row: { id: string; task_key: string; stage_id: number; title: string; prompt: string; hint: string; feature_signature: Json; prompt_hash: string; design_version: string; generation_source: string; provider: string | null; model: string | null; prompt_version: string; status: string; input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; created_at: string; approved_at: string | null };
+				Row: { id: string; task_key: string; stage_id: number; title: string; prompt: string; hint: string; feature_signature: Json; prompt_hash: string; canonical_prompt_hash: string; design_version: string; generation_source: string; provider: string | null; model: string | null; prompt_version: string; status: string; input_tokens: number; output_tokens: number; cache_creation_input_tokens: number; cache_read_input_tokens: number; created_at: string; approved_at: string | null };
 				Insert: never;
 				Update: never;
 				Relationships: Relationship[];
@@ -60,7 +60,7 @@ export type Database = {
 				Relationships: Relationship[];
 			};
 			submissions: {
-				Row: { id: string; learner_id: string; task_key: string; request_id: string; stage_id: number; task_title: string; body: string; learning_phase: string; rubric_version_id: string | null; instruction_version_id: string | null; submitted_at: string };
+				Row: { id: string; learner_id: string; task_key: string; request_id: string; stage_id: number; task_title: string; body: string; learning_phase: string; trial_resolution: Json | null; rubric_version_id: string | null; instruction_version_id: string | null; submitted_at: string };
 				Insert: never;
 				Update: never;
 				Relationships: Relationship[];
@@ -72,9 +72,9 @@ export type Database = {
 				Relationships: Relationship[];
 			};
 			learning_progress: {
-				Row: { learner_id: string; current_stage_id: number; highest_unlocked_stage_id: number; learning_phase: string; phase_passes: number; phase_attempts: number; required_training_passes: number; promotion_test_question_count: number; required_retraining_passes: number; individual_instruction: string | null; completed_at: string | null; updated_at: string };
-				Insert: { learner_id: string; current_stage_id?: number; highest_unlocked_stage_id?: number; learning_phase?: string; phase_passes?: number; phase_attempts?: number; required_training_passes?: number; promotion_test_question_count?: number; required_retraining_passes?: number; individual_instruction?: string | null; completed_at?: string | null; updated_at?: string };
-				Update: { required_training_passes?: number; promotion_test_question_count?: number; required_retraining_passes?: number };
+				Row: { learner_id: string; current_stage_id: number; highest_unlocked_stage_id: number; learning_phase: string; phase_passes: number; phase_attempts: number; frontier_learning_phase: string; frontier_phase_passes: number; frontier_phase_attempts: number; required_training_passes: number; promotion_test_question_count: number; required_retraining_passes: number; easy_feedback_enabled: boolean; topic_selection_mode: string; custom_topics: string[]; individual_instruction: string | null; completed_at: string | null; updated_at: string };
+				Insert: { learner_id: string; current_stage_id?: number; highest_unlocked_stage_id?: number; learning_phase?: string; phase_passes?: number; phase_attempts?: number; frontier_learning_phase?: string; frontier_phase_passes?: number; frontier_phase_attempts?: number; required_training_passes?: number; promotion_test_question_count?: number; required_retraining_passes?: number; easy_feedback_enabled?: boolean; topic_selection_mode?: string; custom_topics?: string[]; individual_instruction?: string | null; completed_at?: string | null; updated_at?: string };
+				Update: { required_training_passes?: number; promotion_test_question_count?: number; required_retraining_passes?: number; easy_feedback_enabled?: boolean; topic_selection_mode?: string; custom_topics?: string[] };
 				Relationships: Relationship[];
 			};
 		};

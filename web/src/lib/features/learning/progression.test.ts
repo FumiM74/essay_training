@@ -4,7 +4,7 @@ import type { LearningProgress, LocalLearningState, ProblemHistoryRecord, Submis
 import { basicQuestionSet, createProblemSpecification, generatePracticeTask, historyTask, isProblemFeatureSignature, practiceTaskPromptHash, resolvePracticeTask } from './problem-generator';
 
 import { createBasicQuestionSetFeedback } from './feedback';
-import { applySubmissionToProgress, defaultLearningProgress, featureSignatureSimilarity, selectLearningStage, selectNextPracticeTask, submissionDecisionLabel, submissionProgressMessage } from './progression';
+import { applySubmissionToProgress, defaultLearningProgress, featureSignatureSimilarity, restoredSubmissionProgressMessage, selectLearningStage, selectNextPracticeTask, submissionDecisionLabel, submissionProgressMessage } from './progression';
 import { updateSkillStats, weakestSkillsForStage } from './mastery';
 import { selectionReasonForAttempt, skillGuidanceFor, stageAnswerExampleFor } from './learning-design';
 
@@ -25,6 +25,14 @@ function history(seed: number, submitted = true, stageId = 1): ProblemHistoryRec
 }
 
 describe('stage progression', () => {
+	it('画面停止後にDBから復元した提出結果の進行状況を説明する', () => {
+		const trainingPass = submission('training-pass', 1);
+		expect(restoredSubmissionProgressMessage(trainingPass, { ...defaultLearningProgress(), phasePasses: 1 })).toBe('進級テストまであと9問');
+		expect(restoredSubmissionProgressMessage(trainingPass, { ...defaultLearningProgress(), phase: 'promotion_test', phasePasses: 0 })).toBe('次の問題から3問の進級テストです。');
+		expect(restoredSubmissionProgressMessage({ ...trainingPass, phase: 'promotion_test' }, { ...defaultLearningProgress(), currentStageId: 2, highestUnlockedStageId: 2 })).toBe('段階2へ進みました。');
+		expect(restoredSubmissionProgressMessage({ ...submission('test-fail', 1, 'revise'), phase: 'promotion_test' }, { ...defaultLearningProgress(), phase: 'retraining' })).toBe('進級テストは不合格でした。次は再トレーニングです。');
+	});
+
 	it('履歴では進級テストの失敗だけを不合格と表示する', () => {
 		expect(submissionDecisionLabel('promotion_test', 'revise')).toBe('不合格');
 		expect(submissionDecisionLabel('training', 'revise')).toBe('要修正');
@@ -68,6 +76,26 @@ describe('stage progression', () => {
 		const returned = selectLearningStage(completed, 4);
 		expect(returned).toMatchObject({ currentStageId: 4, highestUnlockedStageId: 14, phase: 'training', phasePasses: 0, courseCompletedAt: completed.courseCompletedAt });
 		expect(() => selectLearningStage(defaultLearningProgress(), 2)).toThrow();
+	});
+
+	it('復習後に最高到達段階へ戻ると進級テストの状態を復元する', () => {
+		const frontier = { ...defaultLearningProgress(), currentStageId: 5, highestUnlockedStageId: 5, phase: 'promotion_test' as const, phasePasses: 2, phaseAttempts: 3, frontierPhase: 'promotion_test' as const, frontierPhasePasses: 2, frontierPhaseAttempts: 3 };
+		const reviewing = selectLearningStage(frontier, 2);
+		expect(reviewing).toMatchObject({ currentStageId: 2, highestUnlockedStageId: 5, phase: 'training', phasePasses: 0, frontierPhase: 'promotion_test', frontierPhasePasses: 2, frontierPhaseAttempts: 3 });
+		const resumed = selectLearningStage(reviewing, 5);
+		expect(resumed).toMatchObject({ currentStageId: 5, highestUnlockedStageId: 5, phase: 'promotion_test', phasePasses: 2, phaseAttempts: 3 });
+	});
+
+	it('完了済み段階の復習提出は先の段階を閉じず、全段階の進級は即時に保存される', () => {
+		const reviewing = { ...defaultLearningProgress(), currentStageId: 2, highestUnlockedStageId: 5 };
+		const reviewed = applySubmissionToProgress(reviewing, submission('review-pass', 2));
+		expect(reviewed).toMatchObject({ currentStageId: 2, highestUnlockedStageId: 5, phase: 'training' });
+
+		for (let stageId = 1; stageId < 14; stageId += 1) {
+			const before = { ...defaultLearningProgress(), currentStageId: stageId, highestUnlockedStageId: stageId, phase: 'promotion_test' as const, phasePasses: 2, phaseAttempts: 2, frontierPhase: 'promotion_test' as const, frontierPhasePasses: 2, frontierPhaseAttempts: 2 };
+			const after = applySubmissionToProgress(before, { ...submission(`promotion-${stageId}`, stageId), phase: 'promotion_test' });
+			expect(after).toMatchObject({ currentStageId: stageId + 1, highestUnlockedStageId: stageId + 1, phase: 'training', phasePasses: 0 });
+		}
 	});
 
 	it('段階14の条件達成で全課程を修了する', () => {
@@ -180,13 +208,10 @@ describe('problem generation and rotation', () => {
 		expect(afterOneCycle.hint).toContain('主語と述語');
 	});
 
-	it('段階1はセット番号を表示せず、内部特徴で次の5問セットを選ぶ', () => {
+	it('段階1の固定10セットを使い切った後は、同期選択で重複問題を返さない', () => {
 		const state = emptyState();
-		state.problemHistory = Array.from({ length: 12 }, (_, seed) => history(seed));
-		const next = selectNextPracticeTask(state)!;
-		expect(next.prompt).toBe('文を正しく組み立てるための基礎問題5問に解答してください。');
-		expect(next.prompt).not.toMatch(/（セット\d+）/);
-		expect(state.problemHistory.some((item) => item.features.fingerprint === next.features?.fingerprint)).toBe(false);
+		state.problemHistory = Array.from({ length: 10 }, (_, seed) => history(seed));
+		expect(selectNextPracticeTask(state)).toBeUndefined();
 	});
 
 	it('旧版で発行済みの問題も表示時に評価指示を本文からヒントへ移す', () => {
@@ -262,6 +287,24 @@ describe('problem generation and rotation', () => {
 				expect(task.features?.skillTargets.length).toBeGreaterThan(0);
 			}
 		}
+	});
+
+	it('自由設定ではSTEP 4以降に登録テーマを順番に使い、ランダム問題と混ぜない', () => {
+		const state = emptyState();
+		state.progress = { ...state.progress, currentStageId: 4, highestUnlockedStageId: 4, topicSelectionMode: 'custom', customTopics: ['地域医療', '少子化'] };
+		const first = selectNextPracticeTask(state)!;
+		expect(first.features?.customTopic).toBe('地域医療');
+		state.problemHistory.unshift({ taskId: first.id, stageId: 4, taskTitle: first.title, prompt: first.prompt, hint: first.hint, features: first.features!, promptHash: practiceTaskPromptHash(first), issuedAt: '2026-09-10', submittedAt: '2026-09-10', phase: 'training' });
+		expect(selectNextPracticeTask(state)?.features?.customTopic).toBe('少子化');
+	});
+
+	it('ランダム設定では自由設定から共有バンクへ生成された問題を選ばない', () => {
+		const state = emptyState();
+		state.progress = { ...state.progress, currentStageId: 4, highestUnlockedStageId: 4 };
+		const custom = generatePracticeTask(4, 0, { customTopic: '地域医療', selectionReason: 'core', targetSkill: 'clear_claim' });
+		custom.features = { ...custom.features!, generation: { ...custom.features!.generation, source: 'ai' } };
+		state.approvedProblems = [custom];
+		expect(selectNextPracticeTask(state)?.features?.customTopic).toBeUndefined();
 	});
 
 	it('段階1は異なる5領域から1問ずつ出し、全問正解だけを合格にする', () => {

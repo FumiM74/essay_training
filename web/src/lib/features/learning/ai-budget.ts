@@ -29,19 +29,20 @@ export const DEFAULT_AI_BUDGETS: Record<AiOperation, AiBudgetPolicy> = {
 	problem_generation: {
 		operation: 'problem_generation',
 		reviewStatus: 'provisional',
-		maxInputTokensPerRequest: 1800,
-		maxOutputTokensPerRequest: 700,
+		// Includes the reserved worst case for one validation retry.
+		maxInputTokensPerRequest: 12000,
+		maxOutputTokensPerRequest: 7000,
 		dailyRequestsPerLearner: 3,
-		dailyInputTokensPerLearner: 5400,
-		dailyOutputTokensPerLearner: 2100,
+		dailyInputTokensPerLearner: 36000,
+		dailyOutputTokensPerLearner: 21000,
 	},
 	feedback: {
 		operation: 'feedback',
 		reviewStatus: 'provisional',
-		maxInputTokensPerRequest: 6000,
+		maxInputTokensPerRequest: 8000,
 		maxOutputTokensPerRequest: 1800,
 		dailyRequestsPerLearner: 20,
-		dailyInputTokensPerLearner: 120000,
+		dailyInputTokensPerLearner: 160000,
 		dailyOutputTokensPerLearner: 36000,
 	},
 };

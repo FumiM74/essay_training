@@ -57,12 +57,29 @@ export type SkillKey = typeof SKILL_KEYS[number];
 export type ProblemSelectionReason = 'weakness' | 'core' | 'exploration';
 export type ProblemGenerationSource = 'curated' | 'local_variant' | 'ai';
 
+export type AiGenerationContract = {
+	acceptedAnswerExamples: string[];
+	gradingCriteria: Array<{ skillKey: SkillKey; passCondition: string }>;
+	hiddenRequirements: string[];
+	basicQuestions: Array<{
+		category: QuestionSetCategory;
+		instruction: string;
+		prompt: string;
+		choices: string[];
+		referenceAnswers: string[];
+		referenceAnswerLabel: string;
+		gradingPoint: string;
+		skillKey: SkillKey;
+	}>;
+};
+
 export type ProblemFeatureSignature = {
 	version: 2;
 	fingerprint: string;
 	seed: number;
 	topicDomain: TopicDomain;
 	topicKey: string;
+	customTopic?: string;
 	promptFamily: string;
 	skillTargets: SkillKey[];
 	selectionReason: ProblemSelectionReason;
@@ -85,6 +102,7 @@ export type ProblemFeatureSignature = {
 		promptVersion: string;
 		model?: string;
 	};
+	generationContract?: AiGenerationContract;
 };
 
 export type ProblemSpecification = Omit<ProblemFeatureSignature, 'version' | 'fingerprint' | 'seed' | 'surfacePattern' | 'generation'> & {

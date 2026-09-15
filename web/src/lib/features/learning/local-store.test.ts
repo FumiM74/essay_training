@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBasicQuestionSetFeedback, createMockFeedback } from './feedback';
 import { generatePracticeTask } from './problem-generator';
-import { activityCounts, loadLearningState, parseLearningState, recordProblemIssued, recordSubmission, saveCurrentStage, saveDraft, saveProgressionSettings } from './local-store';
+import { activityCounts, loadLearningState, parseLearningState, recordProblemIssued, recordSubmission, saveCurrentStage, saveDraft, saveFeedbackPreference, saveProgressionSettings, saveTopicPreference } from './local-store';
 
 function memoryStorage() {
 	const values = new Map<string, string>();
@@ -77,6 +77,15 @@ describe('local learning store', () => {
 		expect(progress).toMatchObject({ currentStageId: 1, highestUnlockedStageId: 3, phase: 'training', phasePasses: 0 });
 	});
 
+	it('復習の前後で最高到達段階の進級状態を保存する', () => {
+		const storage = memoryStorage();
+		const state = loadLearningState(storage);
+		state.progress = { ...state.progress, currentStageId: 5, highestUnlockedStageId: 5, phase: 'promotion_test', phasePasses: 2, phaseAttempts: 3, frontierPhase: 'promotion_test', frontierPhasePasses: 2, frontierPhaseAttempts: 3 };
+		storage.setItem('essay-training-local-state-v5', JSON.stringify(state));
+		expect(saveCurrentStage(2, storage)).toMatchObject({ currentStageId: 2, highestUnlockedStageId: 5, frontierPhase: 'promotion_test', frontierPhasePasses: 2 });
+		expect(saveCurrentStage(5, storage)).toMatchObject({ currentStageId: 5, highestUnlockedStageId: 5, phase: 'promotion_test', phasePasses: 2, phaseAttempts: 3 });
+	});
+
 	it('同じrequestIdの再送で提出と連続合格を二重計上しない', () => {
 		const storage = memoryStorage();
 		const feedback = createMockFeedback('私は、公共の場にはだれもが使いやすいデザインが必要だと思います。', 1);
@@ -105,6 +114,23 @@ describe('local learning store', () => {
 		expect(saveProgressionSettings(settings, storage)).toMatchObject(settings);
 		expect(() => saveProgressionSettings({ ...settings, promotionTestQuestionCount: 0 }, storage)).toThrow();
 		expect(() => saveProgressionSettings({ ...settings, requiredRetrainingPasses: 11 }, storage)).toThrow();
+	});
+
+	it('解説の難易度を初期値OFFで保存し、いつでも切り替えられる', () => {
+		const storage = memoryStorage();
+		expect(loadLearningState(storage).progress.easyFeedbackEnabled).toBe(false);
+		expect(saveFeedbackPreference(true, storage).easyFeedbackEnabled).toBe(true);
+		expect(loadLearningState(storage).progress.easyFeedbackEnabled).toBe(true);
+		expect(saveFeedbackPreference(false, storage).easyFeedbackEnabled).toBe(false);
+	});
+
+	it('論点はランダムを初期値とし、自由設定を3件・各20文字まで保存する', () => {
+		const storage = memoryStorage();
+		expect(loadLearningState(storage).progress).toMatchObject({ topicSelectionMode: 'random', customTopics: [] });
+		expect(saveTopicPreference('custom', ['少子化と教育', '地域医療'], storage)).toMatchObject({ topicSelectionMode: 'custom', customTopics: ['少子化と教育', '地域医療'] });
+		expect(() => saveTopicPreference('custom', [], storage)).toThrow();
+		expect(() => saveTopicPreference('custom', ['一', '二', '三', '四'], storage)).toThrow();
+		expect(() => saveTopicPreference('custom', ['あ'.repeat(21)], storage)).toThrow();
 	});
 
 	it('進級テストの不合格は同じ問題を終了し、合格数を保ったまま次の問題へ進む', () => {

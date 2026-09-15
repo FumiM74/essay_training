@@ -1,7 +1,8 @@
 import { callClaude, ClaudeError } from '../_shared/claude.ts';
-import { SKILL_KEYS, modelForStage, outputTokenLimit, parseFeedbackRequest, questionSetSizeForStage, skillForBasicQuestion, validateFeedback, type FeedbackResult, type SkillKey } from '../_shared/feedback-contract.ts';
+import { SKILL_KEYS, completeQuestionSetFeedback, modelForStage, outputTokenLimit, parseFeedbackRequest, questionSetSizeForStage, skillForBasicQuestion, validateFeedback, type SkillKey } from '../_shared/feedback-contract.ts';
 import { buildFeedbackPrompt, feedbackOutputSchema } from '../_shared/feedback-prompt.ts';
 import { authenticate, corsHeaders, jsonResponse, readEnv, rpc, sha256 } from '../_shared/runtime.ts';
+import { estimateClaudeInputTokens } from '../_shared/token-estimate.ts';
 
 type Reservation = {
 	state: 'reserved' | 'pending' | 'succeeded' | 'failed' | 'rejected_budget';
@@ -9,6 +10,7 @@ type Reservation = {
 	errorCode?: string;
 	reason?: string;
 	problem?: { taskKey: string; stageId: number; taskTitle: string; prompt: string; hint: string; promptHash: string; featureSignature: { skillTargets?: unknown }; learningPhase: string };
+	policy?: { maxInputTokens: number; maxOutputTokens: number; reviewStatus: string };
 };
 
 function fnvHash(value: string): string {
@@ -21,7 +23,8 @@ function fnvHash(value: string): string {
 }
 
 function questionSetPromptHash(prompt: string, questions: NonNullable<ReturnType<typeof parseFeedbackRequest>['basicQuestions']>): string {
-	const questionText = questions.map((question) => [question.category, question.instruction, question.prompt, ...(question.choices ?? [])].join('\n')).join('\n---\n');
+	const questionText = questions.map((question) => [question.category, question.instruction, question.prompt, ...(question.choices ?? []),
+		...question.referenceAnswers, question.referenceAnswerLabel, question.gradingPoint].join('\n')).join('\n---\n');
 	return fnvHash(`${prompt}\n${questionText}`);
 }
 
@@ -32,44 +35,6 @@ function expectedSkills(problem: NonNullable<Reservation['problem']>, questionSe
 		|| !raw.every((item) => typeof item === 'string' && SKILL_KEYS.includes(item as SkillKey))
 		|| new Set(raw).size !== raw.length) throw new Error('invalid_problem_skills');
 	return raw as SkillKey[];
-}
-
-export function completeQuestionSetFeedback(value: unknown, questions: NonNullable<ReturnType<typeof parseFeedbackRequest>['basicQuestions']>): FeedbackResult {
-	if (!value || typeof value !== 'object') throw new Error('invalid_basic_feedback');
-	const raw = value as Record<string, unknown>;
-	if (raw.schemaVersion !== '1.0' || !['clean', 'revision_required'].includes(String(raw.languageStatus)) || !['pass', 'revise'].includes(String(raw.decision))) throw new Error('invalid_basic_feedback');
-	if (!Array.isArray(raw.basicQuestionResults) || raw.basicQuestionResults.length !== questions.length) throw new Error('invalid_basic_results');
-	const compact = raw.basicQuestionResults.map((item) => {
-		if (!item || typeof item !== 'object') throw new Error('invalid_basic_result');
-		const result = item as Record<string, unknown>;
-		if (typeof result.questionId !== 'string' || result.questionId.length > 120
-			|| typeof result.correct !== 'boolean'
-			|| typeof result.answerLabel !== 'string' || !result.answerLabel.trim() || result.answerLabel.length > 300
-			|| typeof result.explanation !== 'string' || !result.explanation.trim() || result.explanation.length > 600) throw new Error('invalid_basic_result');
-		return result as { questionId: string; correct: boolean; answerLabel: string; explanation: string };
-	});
-	const byId = new Map(compact.map((item) => [item.questionId, item]));
-	if (byId.size !== questions.length) throw new Error('invalid_basic_result_id');
-	const full = questions.map((question) => {
-		const item = byId.get(question.id);
-		if (!item) throw new Error('invalid_basic_result_id');
-		return { ...item, instruction: question.instruction, prompt: question.prompt, answer: question.answer };
-	});
-	const allCorrect = full.every((item) => item.correct);
-	if ((allCorrect && raw.decision !== 'pass') || (!allCorrect && raw.decision !== 'revise')) throw new Error('inconsistent_basic_decision');
-	if ((allCorrect && raw.languageStatus !== 'clean') || (!allCorrect && raw.languageStatus !== 'revision_required')) throw new Error('inconsistent_basic_language_status');
-	return {
-		schemaVersion: '1.0', languageStatus: raw.languageStatus as FeedbackResult['languageStatus'], decision: raw.decision as FeedbackResult['decision'],
-		priorityFeedback: full.map((item, index) => ({
-			title: `問題${index + 1}：${item.correct ? '正解' : '不正解'}`,
-			guidance: `${item.correct ? '正しく解答できています。' : `正解例は「${item.answerLabel}」です。`}${item.explanation}`,
-		})),
-		skillResults: full.map((item, index) => ({
-			skillKey: skillForBasicQuestion(questions[index]), outcome: item.correct ? 'achieved' : 'missed', severity: item.correct ? 0 : 2,
-			evidence: `${item.correct ? '正解' : '不正解'}：${item.explanation}`.slice(0, 500),
-		})),
-		basicQuestionResults: full,
-	};
 }
 
 Deno.serve(async (request) => {
@@ -89,6 +54,11 @@ Deno.serve(async (request) => {
 	}
 	const model = modelForStage(input.stageId, env);
 	const maxTokens = outputTokenLimit(input.stageId);
+	const preliminarySkills = input.basicQuestions ? [...new Set(input.basicQuestions.map(skillForBasicQuestion))] : [];
+	const preliminaryInputTokens = input.basicQuestions ? estimateClaudeInputTokens(
+		buildFeedbackPrompt({ stageId: input.stageId, prompt: '', hint: '', skillTargets: preliminarySkills, learningPhase: 'training', easyFeedbackEnabled: true }, input.answer, input.basicQuestions),
+		feedbackOutputSchema(input.stageId, preliminarySkills),
+	) : null;
 	const requestHash = await sha256(JSON.stringify({ taskId: input.taskId, stageId: input.stageId, answer: input.answer, basicQuestions: input.basicQuestions }));
 	let reservation: Reservation;
 	try {
@@ -96,6 +66,7 @@ Deno.serve(async (request) => {
 			p_learner_id: learnerId, p_request_id: input.requestId, p_task_key: input.taskId,
 			p_stage_id: input.stageId, p_request_hash: requestHash, p_model: model,
 			p_answer_length: input.answer.length, p_requested_output_tokens: maxTokens,
+			p_estimated_input_tokens: preliminaryInputTokens,
 		});
 	} catch (error) { return jsonResponse(request, { error: error instanceof Error ? error.message : 'reservation_failed' }, 409, env); }
 	if (reservation.state === 'succeeded') return jsonResponse(request, { submission: reservation.result, reused: true }, 200, env);
@@ -108,6 +79,12 @@ Deno.serve(async (request) => {
 			p_provider_request_id: '', p_error_code: code, p_input_tokens: 0, p_output_tokens: 0,
 		}).catch(() => undefined);
 	};
+	let easyFeedbackEnabled = false;
+	try { easyFeedbackEnabled = await rpc<boolean>(env, 'get_ai_feedback_preference', { p_learner_id: learnerId }); }
+	catch {
+		await failReservation('feedback_preference_unavailable');
+		return jsonResponse(request, { error: 'feedback_preference_unavailable' }, 503, env);
+	}
 	if (!reservation.problem || reservation.problem.stageId !== input.stageId || reservation.problem.taskKey !== input.taskId) {
 		await failReservation('invalid_reservation');
 		return jsonResponse(request, { error: 'invalid_reservation' }, 500, env);
@@ -117,17 +94,25 @@ Deno.serve(async (request) => {
 		return jsonResponse(request, { error: 'question_set_problem_mismatch' }, 409, env);
 	}
 	let providerRequestId = '';
+	let providerUsage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
 	try {
 		const skills = expectedSkills(reservation.problem, input.basicQuestions);
 		const prompt = buildFeedbackPrompt({
 			stageId: input.stageId, prompt: reservation.problem.prompt, hint: reservation.problem.hint,
-			skillTargets: skills, learningPhase: reservation.problem.learningPhase,
+			skillTargets: skills, learningPhase: reservation.problem.learningPhase, easyFeedbackEnabled,
 		}, input.answer, input.basicQuestions);
-		const claude = await callClaude(env, { model, maxTokens, prompt, schema: feedbackOutputSchema(input.stageId, skills), userId: learnerId });
+		const schema = feedbackOutputSchema(input.stageId, skills);
+		const estimatedInputTokens = estimateClaudeInputTokens(prompt, schema);
+		if (!reservation.policy || estimatedInputTokens > reservation.policy.maxInputTokens) {
+			await failReservation('request_input_limit');
+			return jsonResponse(request, { error: 'feedback_budget_exceeded', reason: 'request_input_limit' }, 429, env);
+		}
+		const claude = await callClaude(env, { model, maxTokens, prompt, schema, userId: learnerId });
 		providerRequestId = claude.id;
+		providerUsage = claude.usage;
 		const feedback = questionSetSizeForStage(input.stageId) !== null
 			? completeQuestionSetFeedback(claude.value, input.basicQuestions!)
-			: validateFeedback(claude.value, skills);
+			: validateFeedback(claude.value, skills, input.answer);
 		const submission = await rpc(env, 'finalize_ai_feedback', {
 			p_learner_id: learnerId, p_request_id: input.requestId, p_task_key: input.taskId,
 			p_stage_id: input.stageId, p_body: input.answer, p_feedback: feedback,
@@ -139,12 +124,12 @@ Deno.serve(async (request) => {
 		return jsonResponse(request, { submission, model }, 200, env);
 	} catch (error) {
 		const code = error instanceof ClaudeError ? error.code : error instanceof Error ? error.message : 'feedback_failed';
-		const usage = error instanceof ClaudeError ? error.usage : undefined;
+		const usage = error instanceof ClaudeError ? error.usage : providerUsage;
 		providerRequestId = error instanceof ClaudeError ? error.providerRequestId : providerRequestId;
 		await rpc(env, 'fail_ai_feedback', {
 			p_learner_id: learnerId, p_request_id: input.requestId, p_provider: 'anthropic', p_model: model,
 			p_provider_request_id: providerRequestId, p_error_code: code,
-			p_input_tokens: usage?.inputTokens ?? 0, p_output_tokens: usage?.outputTokens ?? 0,
+			p_input_tokens: usage.inputTokens, p_output_tokens: usage.outputTokens,
 		}).catch(() => undefined);
 		return jsonResponse(request, { error: code }, code.startsWith('provider_') ? 502 : 500, env);
 	}
