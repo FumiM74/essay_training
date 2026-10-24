@@ -224,7 +224,7 @@ export function recordSubmission(
 		submittedAt
 	};
 	state.submissions.unshift(record);
-	const advancesToNewProblem = record.phase === 'promotion_test' || input.feedback.decision === 'pass';
+	const advancesToNewProblem = input.feedback.decision === 'pass';
 	if (history && advancesToNewProblem) history.submittedAt = submittedAt;
 	else if (!history) {
 		const task = resolvePracticeTask(input.taskId);

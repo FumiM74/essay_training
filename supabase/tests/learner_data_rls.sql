@@ -105,15 +105,14 @@ begin
     raise exception 'Failed promotion question did not retain accumulated passes';
   end if;
   if exists (select 1 from public.drafts where learner_id = auth.uid() and task_key = 'rls-test-2')
-    or not exists (select 1 from public.problem_history where learner_id = auth.uid() and task_key = 'rls-test-2' and submitted_at is not null)
+    or not exists (select 1 from public.problem_history where learner_id = auth.uid() and task_key = 'rls-test-2' and submitted_at is null)
   then
-    raise exception 'Failed promotion question did not move to a new problem';
+    raise exception 'Promotion-test revision did not keep the same problem open';
   end if;
 
-  perform public.issue_problem('rls-test-3', 1::smallint, 'Promotion 3', '問題P3', 'ヒント', features_a, 'fnv1a:eeeeeeee', null::uuid);
-	perform pg_temp.test_submit_mock(gen_random_uuid(), 'rls-test-3', 1::smallint, 'Promotion 3', '本文です。', pass_feedback);
+	perform pg_temp.test_submit_mock(gen_random_uuid(), 'rls-test-2', 1::smallint, 'Promotion 2', '修正した本文です。', pass_feedback);
   if (select current_stage_id from public.learning_progress where learner_id = auth.uid()) <> 2 then
-	    raise exception 'Accumulated promotion-test passes did not advance the stage';
+	    raise exception 'Corrected promotion-test answer did not advance the stage';
   end if;
   perform public.select_learning_stage(1::smallint);
   if (select current_stage_id <> 1 or highest_unlocked_stage_id <> 2 from public.learning_progress where learner_id = auth.uid()) then

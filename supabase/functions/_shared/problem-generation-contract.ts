@@ -1,5 +1,5 @@
 export const PROBLEM_GENERATION_MODEL = 'claude-sonnet-5';
-export const PROBLEM_GENERATION_PROMPT_VERSION = 'problem-generation-v5';
+export const PROBLEM_GENERATION_PROMPT_VERSION = 'problem-generation-v6';
 
 export const STAGE_PROBLEM_SKILLS: Record<number, string[]> = {
 	1: ['subject_predicate', 'particle_accuracy', 'auxiliary_accuracy', 'modifier_clarity', 'sentence_completion'],
@@ -73,6 +73,12 @@ function normalized(value: string): string {
 	return value.normalize('NFKC').replace(/[\s　「」『』（）()、。！？!?]/g, '');
 }
 
+function hasRedundantSourceRestatement(instruction: string): boolean {
+	const collectivelyCoversSources = /(?:すべて|全部).{0,12}(?:使|残)/.test(instruction);
+	const repeatsOneSource = /[「『][^」』]{1,300}[」』]という(?:内容|情報|文)も?(?:残|使)/.test(instruction);
+	return collectivelyCoversSources && repeatsOneSource;
+}
+
 const questionDesignByStage: Record<number, Array<{ category: GeneratedQuestionCategory; skillKey: string }>> = {
 	1: [
 		{ category: 'subject_predicate', skillKey: 'subject_predicate' },
@@ -130,6 +136,7 @@ function validateGeneratedBasicQuestion(value: unknown, expected: { category: Ge
 		|| !question.requiredAdditions.every((item) => item && typeof item === 'object' && nonEmpty((item as Record<string, unknown>).role, 80)
 			&& nonEmpty((item as Record<string, unknown>).description, 500))
 		|| !Array.isArray(question.hiddenRequirements) || question.hiddenRequirements.length !== 0) return false;
+	if (hasRedundantSourceRestatement(String(question.instruction))) throw new Error('redundant_source_restatement');
 	validateSourceDisclosure(question as unknown as GeneratedBasicQuestion);
 	if (expected.category === 'information_selection') {
 		const instruction = String(question.instruction);

@@ -33,8 +33,8 @@ describe('stage progression', () => {
 		expect(restoredSubmissionProgressMessage({ ...submission('test-fail', 1, 'revise'), phase: 'promotion_test' }, { ...defaultLearningProgress(), phase: 'retraining' })).toBe('進級テストは不合格でした。次は再トレーニングです。');
 	});
 
-	it('履歴では進級テストの失敗だけを不合格と表示する', () => {
-		expect(submissionDecisionLabel('promotion_test', 'revise')).toBe('不合格');
+	it('再提出できる結果は段階やフェーズにかかわらず要修正と表示する', () => {
+		expect(submissionDecisionLabel('promotion_test', 'revise')).toBe('要修正');
 		expect(submissionDecisionLabel('training', 'revise')).toBe('要修正');
 		expect(submissionDecisionLabel('retraining', 'revise')).toBe('要修正');
 		expect(submissionDecisionLabel('promotion_test', 'pass')).toBe('合格');
@@ -114,7 +114,7 @@ describe('stage progression', () => {
 		expect(submissionProgressMessage(before, passed, 'pass')).toBe('進級テストまであと1問');
 		const testBefore = { ...defaultLearningProgress(), phase: 'promotion_test' as const, phasePasses: 1, phaseAttempts: 2 };
 		const testFailed = applySubmissionToProgress(testBefore, { ...submission('test-fail-message', 1, 'revise'), phase: 'promotion_test' });
-		expect(submissionProgressMessage(testBefore, testFailed, 'revise')).toBe('不合格。合格数は1/3のままです。次の問題へ進みます。');
+		expect(submissionProgressMessage(testBefore, testFailed, 'revise')).toBe('合格数は1/3のままです。同じ問題を修正して再提出してください。');
 	});
 
 	it('進級した場合の案内は段階名だけを表示する', () => {
@@ -318,5 +318,9 @@ describe('problem generation and rotation', () => {
 		const feedback = createBasicQuestionSetFeedback(questions, oneWrong);
 		expect(feedback.decision).toBe('revise');
 		expect(feedback.priorityFeedback).toHaveLength(5);
+		const correctedAnswers = { ...oneWrong, [questions[0].id]: questions[0].acceptedAnswers[0], [questions[1].id]: '別の誤答' };
+		const cumulative = createBasicQuestionSetFeedback(questions, correctedAnswers, feedback);
+		expect(cumulative.basicQuestionResults?.[1].correct).toBe(true);
+		expect(cumulative.decision).toBe('pass');
 	});
 });

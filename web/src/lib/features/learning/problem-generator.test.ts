@@ -98,8 +98,8 @@ describe('practice task prompt hash', () => {
 		expect(questions).toHaveLength(3);
 		expect(questions[0].instruction).toContain('関係のない一文を除いて');
 		expect(questions[1].instruction).toContain('どちらか一文だけを残し');
-		expect(questions[2].instruction).toContain('三つの内容をすべて使って');
-		expect(questions[2].instruction).toContain('「オンライン学習は便利だ」という内容も残します');
+		expect(questions[2].instruction).toContain('三つの内容をすべて使い');
+		expect(questions[2].instruction).not.toContain('という内容も残します');
 		expect(questions[2].instruction).toContain('両方を踏まえた結論');
 		expect(questions[2].answerLabel).toContain('便利');
 	});

@@ -11,7 +11,13 @@ import { skillStatKey } from './learning-design';
 import { isTopicSelectionMode, normalizeCustomTopics } from './topic-preferences';
 
 export type LearningScope = { mode: 'local' } | { mode: 'cloud'; userId: string };
-type SubmissionInput = { requestId: string; task: PracticeTask; text: string; feedback: FeedbackResult; basicAnswers?: Record<string, string> };
+type SubmissionInput = {
+	requestId: string;
+	task: PracticeTask;
+	text: string;
+	feedback: FeedbackResult;
+	basicAnswers?: Record<string, string>;
+};
 const PROGRESS_SELECT = 'current_stage_id, highest_unlocked_stage_id, learning_phase, phase_passes, phase_attempts, frontier_learning_phase, frontier_phase_passes, frontier_phase_attempts, required_training_passes, promotion_test_question_count, required_retraining_passes, easy_feedback_enabled, topic_selection_mode, custom_topics, completed_at';
 
 type ProgressRow = Pick<Database['public']['Tables']['learning_progress']['Row'],
@@ -72,6 +78,7 @@ export function submissionErrorMessage(error: unknown): string {
 	if (code === 'feedback_budget_exceeded' && reason === 'disabled') return 'Claude添削は現在停止しています。提出内容は保存されていません。時間をおいて、もう一度お試しください。';
 	if (code === 'feedback_budget_exceeded') return '本日のAI添削上限に達しました。提出内容は保存されていません。時間をおいて、もう一度お試しください。';
 	if (code === 'feedback_preference_unavailable') return '解説の設定を確認できませんでした。提出内容は保存されていません。もう一度お試しください。';
+	if (code === 'revision_context_unavailable') return '前回の添削結果を確認できませんでした。提出内容は保存されていません。もう一度お試しください。';
 	if (code === 'feedback_in_progress') return '同じ解答の添削を処理中です。少し待ってから、もう一度お試しください。';
 	if (code === 'provider_timeout' || code === 'provider_network_error' || code?.startsWith('provider_http_')) return 'Claudeの添削を受け取れませんでした。提出内容は保存されていません。解答を確認して、もう一度お試しください。';
 	return `提出を保存できませんでした${code ? `（エラーコード: ${code}）` : ''}。接続を確認して、もう一度お試しください。`;

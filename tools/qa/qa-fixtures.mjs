@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+const curriculum = JSON.parse(readFileSync(new URL('../../web/src/lib/data/curriculum.json', import.meta.url), 'utf8'));
 
 const stageSkills = {
   1: ['subject_predicate', 'particle_accuracy', 'auxiliary_accuracy', 'modifier_clarity', 'sentence_completion'],
@@ -9,18 +12,28 @@ const stageSkills = {
 
 function hash(value) { return `qa:${createHash('sha256').update(value).digest('hex').slice(0, 32)}`; }
 
+export function fixedProblemCountForStage(stageId) {
+  const stage = curriculum.stages?.find((item) => item.id === stageId);
+  const count = stage?.tasks?.length ?? 0;
+  if (!Number.isInteger(count) || count < 1) throw new Error(`No fixed problems were found for STEP ${stageId}.`);
+  return count;
+}
+
 export function qaFixturesForStage(stageId) {
   const skills = stageSkills[stageId];
   if (!skills) throw new Error('stage must be between 1 and 14');
-  return Array.from({ length: 10 }, (_, seed) => {
+  const fixedProblemCount = fixedProblemCountForStage(stageId);
+  return Array.from({ length: fixedProblemCount }, (_, seed) => {
     const skill = skills[seed % skills.length];
-    const taskKey = `stage-${stageId}-generated-${seed.toString(36)}-core-${skill}`;
+    // The QA suffix keeps synthetic history out of the normal task-key namespace,
+    // while generatedTaskSeed can still recover the original fixed-problem seed.
+    const taskKey = `stage-${stageId}-generated-${seed.toString(36)}-core-${skill}-q00000000`;
     const prompt = `QA用の固定問題履歴 ${stageId}-${seed + 1}。この問題は固定問題を使い切った状態を再現するためだけに投入されます。`;
     const featureSignature = {
       version: 2, fingerprint: hash(`${taskKey}:feature`), seed, topicDomain: 'education', topicKey: `qa-fixed-stage-${stageId}`,
       promptFamily: 'qa-fixed-exhaustion', skillTargets: [skill], selectionReason: 'core', surfacePattern: 'qa-fixture',
       generation: { source: 'curated', designVersion: 'qa-harness-v1', promptVersion: 'qa-harness-v1' },
     };
-    return { taskKey, stageId, title: `QA固定問題 ${seed + 1}/10`, prompt, hint: 'QA専用の投入済み履歴です。', featureSignature, promptHash: hash(`${taskKey}:prompt`) };
+    return { taskKey, stageId, title: `QA固定問題 ${seed + 1}/${fixedProblemCount}`, prompt, hint: 'QA専用の投入済み履歴です。', featureSignature, promptHash: hash(`${taskKey}:prompt`) };
   });
 }

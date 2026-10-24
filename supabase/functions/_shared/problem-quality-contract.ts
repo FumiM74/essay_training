@@ -1,7 +1,7 @@
 import type { GeneratedProblem } from './problem-generation-contract.ts';
 
-export const PROBLEM_QUALITY_PROMPT_VERSION = 'problem-quality-review-v2';
-export const PROBLEM_REPAIR_PROMPT_VERSION = 'problem-quality-repair-v1';
+export const PROBLEM_QUALITY_PROMPT_VERSION = 'problem-quality-review-v3';
+export const PROBLEM_REPAIR_PROMPT_VERSION = 'problem-quality-repair-v2';
 
 export const QUALITY_DIMENSIONS = [
 	'instructionClarity', 'internalConsistency', 'answerability', 'readability',

@@ -234,13 +234,13 @@ STUDIOでLPを作り一般公開。
 
 9.2 初期採用アーキテクチャ
 
-Cloudflare Pages：PWAの画面（静的配信）。
+Cloudflare Workers：SvelteKitのPWA画面と静的アセットをまとめて配信する。Workers Static Assetsが、旧案でCloudflare Pagesに想定していた静的配信を担う。現在はPagesプロジェクトを使用しない。
 
-Cloudflare Workers：添削API、認証済み要求の受付、Claude/OpenAI API呼び出し、決済Webhook、入力・AI出力の検証を担う。APIキーをブラウザに渡さない。
+Supabase Edge Functions：認証済みの添削・問題生成要求、Claude API呼び出し、入力・AI出力の検証を担う。Claude APIキーをブラウザやCloudflareへ渡さない。決済WebhookもSupabase側へ集約する方針とする。
 
 Supabase：認証、PostgreSQL、行レベルセキュリティ（RLS）、リアルタイム反映。学習者ごとのデータを user_id で分離する。
 
-Claude APIを初期の添削モデル候補とする。OpenAI APIへ差し替えられるよう、Worker内の添削エージェントをモデル固有部分から分離する。
+Claude APIを初期の添削・問題生成モデルとする。モデル固有部分はSupabase Edge Functionsの共有層へ分離し、将来の差し替えに備える。
 
 Cloudflare Queues：初期は必須ではない。添削待ち・再試行・負荷平準化が必要になった段階でWorkerの後段に追加する。
 

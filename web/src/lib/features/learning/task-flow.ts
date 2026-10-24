@@ -33,6 +33,6 @@ export function taskResultAction(input: {
 	courseCompleted: boolean;
 }): TaskResultAction {
 	if (input.courseCompleted && input.stageId === MAX_STAGE_ID && input.phase === 'promotion_test' && input.decision === 'pass') return 'course_complete';
-	if (input.decision === 'revise' && input.phase !== 'promotion_test') return 'revise';
+	if (input.decision === 'revise') return 'revise';
 	return 'next';
 }

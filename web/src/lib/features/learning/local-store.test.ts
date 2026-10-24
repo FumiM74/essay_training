@@ -133,7 +133,7 @@ describe('local learning store', () => {
 		expect(() => saveTopicPreference('custom', ['あ'.repeat(21)], storage)).toThrow();
 	});
 
-	it('進級テストの不合格は同じ問題を終了し、合格数を保ったまま次の問題へ進む', () => {
+	it('進級テストの要修正は同じ問題と答案を保持し、合格数を変えない', () => {
 		const storage = memoryStorage();
 		const state = loadLearningState(storage);
 		state.progress = { ...state.progress, phase: 'promotion_test', phasePasses: 1, phaseAttempts: 1 };
@@ -143,8 +143,8 @@ describe('local learning store', () => {
 		const feedback = createMockFeedback('短い', 1, task.features?.skillTargets);
 		recordSubmission({ requestId: 'promotion-fail', taskId: task.id, stageId: 1, taskTitle: task.title, text: '短い', feedback }, storage);
 		const after = loadLearningState(storage);
-		expect(after.problemHistory.find((item) => item.taskId === task.id)?.submittedAt).not.toBeNull();
-		expect(after.drafts[task.id]).toBeUndefined();
+		expect(after.problemHistory.find((item) => item.taskId === task.id)?.submittedAt).toBeNull();
+		expect(after.drafts[task.id]?.text).toBe('短い');
 		expect(after.progress).toMatchObject({ phase: 'promotion_test', phasePasses: 1, phaseAttempts: 2 });
 	});
 

@@ -22,6 +22,12 @@ export type BasicQuestionInput = {
 	referenceAnswers: string[];
 	referenceAnswerLabel: string;
 	gradingPoint: string;
+	lockedCorrect?: boolean;
+};
+
+export type RevisionContext = {
+	previousAnswer: string;
+	requestedChanges: Array<{ title: string; guidance: string }>;
 };
 
 export type FeedbackRequest = {
@@ -30,6 +36,7 @@ export type FeedbackRequest = {
 	stageId: number;
 	answer: string;
 	basicQuestions?: BasicQuestionInput[];
+	revisionContext?: RevisionContext;
 };
 
 export type SkillResult = {
@@ -127,8 +134,21 @@ export function parseFeedbackRequest(value: unknown): FeedbackRequest {
 				|| !question.referenceAnswers.every((item) => nonEmpty(item, 3000))
 				|| !nonEmpty(question.referenceAnswerLabel, 300) || !nonEmpty(question.gradingPoint, 600)) throw new Error('invalid_basic_question_text');
 			if (question.choices !== undefined && (!Array.isArray(question.choices) || question.choices.length < 2 || question.choices.length > 8 || !question.choices.every((item) => nonEmpty(item, 200)))) throw new Error('invalid_basic_question_choices');
+			if (question.lockedCorrect !== undefined && typeof question.lockedCorrect !== 'boolean') throw new Error('invalid_locked_correct');
 		}
-	} else if (input.basicQuestions !== undefined) throw new Error('unexpected_basic_questions');
+		if (input.revisionContext !== undefined) throw new Error('unexpected_revision_context');
+	} else {
+		if (input.basicQuestions !== undefined) throw new Error('unexpected_basic_questions');
+		if (input.revisionContext !== undefined) {
+			if (!input.revisionContext || typeof input.revisionContext !== 'object' || Array.isArray(input.revisionContext)) throw new Error('invalid_revision_context');
+			const context = input.revisionContext as Record<string, unknown>;
+			if (!nonEmpty(context.previousAnswer, 20000)
+				|| !Array.isArray(context.requestedChanges) || context.requestedChanges.length < 1 || context.requestedChanges.length > 3
+				|| !context.requestedChanges.every((item) => item && typeof item === 'object'
+					&& nonEmpty((item as Record<string, unknown>).title, 120)
+					&& nonEmpty((item as Record<string, unknown>).guidance, 1000))) throw new Error('invalid_revision_context');
+		}
+	}
 	return input as FeedbackRequest;
 }
 
@@ -197,11 +217,12 @@ export function completeQuestionSetFeedback(value: unknown, questions: BasicQues
 		const matchesReference = question.referenceAnswers.some((answer) => normalizedAnswer(answer) === learner);
 		const matchesClaudeAnswer = normalizedAnswer(item.answerLabel) === learner;
 		const correctedFalseNegative = !item.correct && (matchesReference || matchesClaudeAnswer);
+		const lockedCorrect = question.lockedCorrect === true;
 		return {
 			...item,
-			correct: item.correct || matchesReference || matchesClaudeAnswer,
-			answerLabel: correctedFalseNegative ? question.referenceAnswerLabel : item.answerLabel,
-			explanation: correctedFalseNegative ? question.gradingPoint : item.explanation,
+			correct: lockedCorrect || item.correct || matchesReference || matchesClaudeAnswer,
+			answerLabel: lockedCorrect || correctedFalseNegative ? question.referenceAnswerLabel : item.answerLabel,
+			explanation: lockedCorrect ? '前回までに正解済みのため、この解答は保持されています。' : correctedFalseNegative ? question.gradingPoint : item.explanation,
 			instruction: question.instruction,
 			prompt: question.prompt,
 			answer: question.learnerAnswer,

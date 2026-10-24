@@ -1,6 +1,6 @@
-import { questionSetSizeForStage, STAGE_FEEDBACK_DESIGN, skillForBasicQuestion, type BasicQuestionInput, type SkillKey } from './feedback-contract.ts';
+import { questionSetSizeForStage, STAGE_FEEDBACK_DESIGN, skillForBasicQuestion, type BasicQuestionInput, type RevisionContext, type SkillKey } from './feedback-contract.ts';
 
-export const FEEDBACK_PROMPT_VERSION = 'claude-feedback-v3';
+export const FEEDBACK_PROMPT_VERSION = 'claude-feedback-v4';
 
 export type ProblemContext = {
 	stageId: number;
@@ -11,7 +11,7 @@ export type ProblemContext = {
 	easyFeedbackEnabled?: boolean;
 };
 
-export function buildFeedbackPrompt(problem: ProblemContext, answer: string, basicQuestions?: BasicQuestionInput[]): string {
+export function buildFeedbackPrompt(problem: ProblemContext, answer: string, basicQuestions?: BasicQuestionInput[], revisionContext?: RevisionContext): string {
 	const design = STAGE_FEEDBACK_DESIGN[problem.stageId];
 	if (!design) throw new Error('missing_stage_design');
 	const common = [
@@ -37,7 +37,8 @@ export function buildFeedbackPrompt(problem: ProblemContext, answer: string, bas
 	if (questionSetSize !== null) {
 		return [...common,
 			'<question_set_rules>',
-			`- ${questionSetSize}問をそれぞれ独立して採点し、${questionSetSize}問すべて正解した場合だけdecisionをpassにしてください。`,
+			`- ${questionSetSize}問をそれぞれ独立して採点し、今回までに${questionSetSize}問すべてが正解になった場合だけdecisionをpassにしてください。`,
+			'- lockedCorrectがtrueの問題は前回までに正解済みです。再採点で不正解へ戻さず、correctをtrueにして保持してください。今回の採点対象はlockedCorrectがtrueでない問題だけです。',
 			'- 選択式は選択肢の意味と文法で判定します。記述式は正解例との文字列一致ではなく、表記揺れ、句読点の有無、同じ意味の自然な言い換えを許容してください。',
 			'- 各問では、その問題が求めていない情報や表現を追加条件にしないでください。',
 			'- 正解例は一つの書き方の例です。指示文に明記されていない内容を正解例だけから必須条件にしてはいけません。反対に、「すべて使う」「残す」「除く」「結論を加える」などの指定がある場合は、その指定を採点してください。',
@@ -53,6 +54,12 @@ export function buildFeedbackPrompt(problem: ProblemContext, answer: string, bas
 		'<single_answer_rules>',
 		'- 学習者の提出内容はlearner_answerタグの中だけです。task内の空欄記号や指示文を、未回答の答案と取り違えないでください。',
 		'- decision、languageStatus、priorityFeedback、skillResultsの判定内容を互いに矛盾させないでください。',
+		...(revisionContext ? [
+			'- 今回は同じ問題への再提出です。previous_answerとrequested_changesを参照し、指摘された箇所が実際に直ったかを最初に確認してください。',
+			'- 指摘箇所が直り、現在のSTEPで合格を妨げる重大な問題が残っていなければpassにしてください。再提出のたびに別の細かな要求を追加して、合格を先送りしてはいけません。',
+			'- 指摘箇所が直っていない場合は、previous_answerとlearner_answerの該当表現を比べ、まだ何をどう直す必要があるかを1点だけ具体的に示してください。',
+			`<revision_context>${JSON.stringify(revisionContext)}</revision_context>`,
+		] : []),
 		'</single_answer_rules>',
 		`<task>${JSON.stringify({ prompt: problem.prompt, hint: problem.hint, learningPhase: problem.learningPhase, skillTargets: problem.skillTargets })}</task>`,
 		`<learner_answer>${JSON.stringify(answer)}</learner_answer>`,

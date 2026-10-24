@@ -74,6 +74,58 @@ describe('Claude problem generation contract', () => {
 		expect(prompt).toContain('avoidFingerprints');
 		expect(prompt).toContain('information_selection');
 		expect(prompt).toContain('二文以内の自然な指示');
+		expect(prompt).toContain('〜という内容も残します');
+		expect(prompt).toContain('重ねて説明しない');
+	});
+
+	it('STEP 3では、全素材を使う指示のあとに個別素材を残すと言い直す問題を拒否する', () => {
+		const stageThreeSpecification: ProblemGenerationSpecification = {
+			stageId: 3, topicDomain: 'technology', topicKey: 'online-learning', promptFamily: 'three-question-logic-flow',
+			skillTargets: ['paragraph_coherence', 'claim_reason_link', 'paragraph_analysis'], selectionReason: 'exploration',
+			maximumPromptCharacters: 1200, avoidFingerprints: [],
+		};
+		const problem = {
+			title: '文章の流れを整える3問', prompt: '文章の流れを考えて、三問に答えてください。',
+			hint: '各問題で、文と文のつながりを確認しましょう。', sourceUnits: [], requiredAdditions: [],
+			acceptedAnswerExamples: [], gradingCriteria: [], hiddenRequirements: [],
+			basicQuestions: [
+				{
+					category: 'sentence_order', instruction: '次の三文をすべて使い、自然な順序に並べてください。',
+					prompt: '①学習方法を見直した。\n②理解しやすくなった。\n③説明を図にした。', choices: ['①→③→②', '②→①→③'],
+					referenceAnswers: ['①→③→②'], referenceAnswerLabel: '①→③→②', gradingPoint: '行動、工夫、結果の順にします。',
+					skillKey: 'paragraph_coherence', sourceUnits: [
+						{ content: '①学習方法を見直した。', treatment: 'must_keep' as const },
+						{ content: '②理解しやすくなった。', treatment: 'must_keep' as const },
+						{ content: '③説明を図にした。', treatment: 'must_keep' as const },
+					], requiredAdditions: [], hiddenRequirements: [],
+				},
+				{
+					category: 'missing_link', instruction: '次の二文をすべて使い、間に理由を一文補ってください。',
+					prompt: '地域の図書館は必要だ。\n図書館を利用しやすくするべきだ。', choices: [],
+					referenceAnswers: ['多くの人が学ぶための資料を利用できるからだ。'], referenceAnswerLabel: '多くの人が学ぶための資料を利用できるからだ。',
+					gradingPoint: '最初の意見と最後の結論を理由でつなぎます。', skillKey: 'claim_reason_link', sourceUnits: [
+						{ content: '地域の図書館は必要だ。', treatment: 'must_keep' as const },
+						{ content: '図書館を利用しやすくするべきだ。', treatment: 'must_keep' as const },
+					], requiredAdditions: [{ role: '理由', description: '意見と結論のつながりを示す。' }], hiddenRequirements: [],
+				},
+				{
+					category: 'flow_revision',
+					instruction: '次の三つの内容をすべて使い、利点、課題、両方を踏まえた結論の順に書き直してください。意味を保ったまま、言葉や文の形は変えて構いません。',
+					prompt: 'オンライン学習は繰り返し復習できる。\n端末を持たない家庭もある。\nオンライン学習は便利だ。', choices: [],
+					referenceAnswers: ['オンライン学習は復習に便利だが、端末を持たない家庭もあるため、利用環境に配慮する必要がある。'],
+					referenceAnswerLabel: 'オンライン学習は復習に便利だが、端末を持たない家庭もあるため、利用環境に配慮する必要がある。',
+					gradingPoint: '利点と課題の両方から結論を導きます。', skillKey: 'paragraph_analysis', sourceUnits: [
+						{ content: 'オンライン学習は繰り返し復習できる。', treatment: 'may_rephrase' as const },
+						{ content: '端末を持たない家庭もある。', treatment: 'may_rephrase' as const },
+						{ content: 'オンライン学習は便利だ。', treatment: 'may_rephrase' as const },
+					], requiredAdditions: [{ role: '結論', description: '利点と課題の両方を踏まえる。' }], hiddenRequirements: [],
+				},
+			],
+		};
+		expect(validateGeneratedProblem(problem, stageThreeSpecification)).toEqual(problem);
+		const redundant = structuredClone(problem);
+		redundant.basicQuestions[2].instruction = '次の三つの内容をすべて使ってください。「オンライン学習は便利だ」という内容も残します。利点、課題、結論の順に書き直してください。意味を保ったまま、言葉や文の形は変えて構いません。';
+		expect(() => validateGeneratedProblem(redundant, stageThreeSpecification)).toThrow('redundant_source_restatement');
 	});
 
 	it('自由設定テーマを改変せず使うよう生成プロンプトへ明示する', () => {
@@ -182,6 +234,7 @@ describe('Claude problem generation contract', () => {
 		expect(reviewPrompt).toContain('問題を自分で解き');
 		expect(reviewPrompt).toContain('隠れた採点条件');
 		expect(reviewPrompt).toContain('「補足」など役割の曖昧な見出し');
+		expect(reviewPrompt).toContain('〜という内容も残します');
 		const review = validateProblemQualityReview({
 			verdict: 'revise', summary: '指示の一部を明確にする必要があります。',
 			scores: Object.fromEntries(QUALITY_DIMENSIONS.map((key) => [key, key === 'instructionClarity' ? 3 : 4])),

@@ -22,12 +22,24 @@ select public.register_qa_test_learner(
   'Rolled-back QA integration test'
 );
 
+insert into public.problem_bank (
+  task_key, stage_id, title, prompt, hint, feature_signature, prompt_hash,
+  canonical_prompt_hash, design_version, generation_source, prompt_version,
+  status, approved_at
+) values (
+  'stage-4-generated-z-core-clear_claim-i11111111', 4,
+  'QA approved shared problem', 'QA approved shared prompt', 'QA approved shared hint',
+  '{"version":2,"fingerprint":"qa-approved-fingerprint","seed":35,"topicDomain":"education","topicKey":"qa-approved-stage-4","promptFamily":"qa-approved","skillTargets":["clear_claim"],"selectionReason":"core","surfacePattern":"qa-test","generation":{"source":"ai","designVersion":"qa-harness-v1","promptVersion":"qa-harness-v1"}}'::jsonb,
+  'fnv1a:qa-approved', 'fnv1a:qa-approved', 'qa-harness-v1', 'ai',
+  'qa-harness-v1', 'approved', now()
+);
+
 select public.seed_qa_fixed_exhaustion(
   (select id from qa_test_users where n = 1),
   4::smallint,
   (
     select jsonb_agg(jsonb_build_object(
-      'taskKey', format('stage-4-generated-%s-core-clear_claim', to_hex(seed)),
+        'taskKey', format('stage-4-generated-%s-core-clear_claim-q00000000', to_hex(seed)),
       'stageId', 4,
       'title', format('QA fixture %s', seed + 1),
       'prompt', format('QA fixture prompt %s', seed + 1),
@@ -46,15 +58,22 @@ select public.seed_qa_fixed_exhaustion(
         'generation', jsonb_build_object('source', 'curated', 'designVersion', 'qa-harness-v1', 'promptVersion', 'qa-harness-v1')
       )
     ) order by seed)
-    from generate_series(0, 9) seed
+    from generate_series(0, 11) seed
   )
 );
 
 do $$
 declare v_user uuid := (select id from qa_test_users where n = 1);
 begin
-  if (select count(*) from public.problem_history where learner_id = v_user) <> 10 then
-    raise exception 'QA seed did not create ten consumed problems';
+  if (select count(*) from public.problem_history where learner_id = v_user) <> 13 then
+    raise exception 'QA seed did not consume the dynamic fixed set and approved shared bank';
+  end if;
+  if not exists (
+    select 1 from public.problem_history h
+    join public.problem_bank b on b.id = h.problem_id
+    where h.learner_id = v_user and b.status = 'approved'
+  ) then
+    raise exception 'QA seed did not mark the approved shared problem as consumed';
   end if;
   if (select current_stage_id <> 4 or highest_unlocked_stage_id <> 14 from public.learning_progress where learner_id = v_user) then
     raise exception 'QA seed did not prepare the requested stage';

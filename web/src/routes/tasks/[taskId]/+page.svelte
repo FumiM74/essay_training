@@ -185,7 +185,7 @@
 			}
 			const saved = state.drafts[activeTaskId];
 			const activeProblem = state.problemHistory.some((item) => item.taskId === activeTaskId && item.stageId === task.stageId && item.submittedAt === null);
-			const revising = Boolean(activeProblem && previous?.feedback.decision === 'revise' && previous.phase !== 'promotion_test');
+			const revising = Boolean(activeProblem && previous?.feedback.decision === 'revise');
 			if (revising && previous) {
 				feedback = previous.feedback;
 				screen = 'revision';
@@ -193,7 +193,7 @@
 			if (task.questionSet?.length) {
 				basicAnswers = restoreBasicAnswers(revising ? previous?.feedback ?? null : null, saved?.text);
 				draft = '';
-			} else draft = saved?.text ?? '';
+			} else draft = saved?.text ?? (revising ? previous?.text ?? '' : '');
 			savedAt = saved ? `${new Date(saved.updatedAt).toLocaleString('ja-JP')}に保存` : 'まだ保存されていません';
 		} catch (error) {
 			if (version !== restoreVersion) return;
@@ -259,8 +259,9 @@
 		const version = restoreVersion;
 		const activeScope = scope;
 		const submittedText = isQuestionSet ? basicSubmissionText() : draft;
+		const previousFeedback = screen === 'revision' ? feedback : null;
 		const snapshot = captureSubmission({ task, text: submittedText, progress: learning.progress, feedback: isQuestionSet && task.questionSet
-			? createBasicQuestionSetFeedback(task.questionSet, basicAnswers)
+			? createBasicQuestionSetFeedback(task.questionSet, basicAnswers, previousFeedback)
 			: createMockFeedback(draft, task.stageId, task.features?.skillTargets) });
 		const rememberedSubmission = pendingSubmissionForTask(submissionStorage(), snapshot.task.id);
 		pendingSubmissionId ??= crypto.randomUUID();
@@ -278,7 +279,13 @@
 			if (version !== restoreVersion) return;
 			const previousProgress = snapshot.progress;
 			const outcome = await saveThenRefresh(
-				() => submitLearning(activeScope, { requestId, task: snapshot.task, text: snapshot.text, feedback: snapshot.feedback, basicAnswers: isQuestionSet ? basicAnswers : undefined }),
+				() => submitLearning(activeScope, {
+					requestId,
+					task: snapshot.task,
+					text: snapshot.text,
+					feedback: snapshot.feedback,
+					basicAnswers: isQuestionSet ? basicAnswers : undefined,
+				}),
 				() => loadLearningState(activeScope),
 			);
 			if (version !== restoreVersion) return;
@@ -379,7 +386,7 @@
 <main class:promotion-test-screen={isPromotionTest} class:result-screen={screen === 'result'}>
 	<p class="eyebrow">STEP {task.stageId}・{phaseLabel(displayedProgress.phase)}</p><h1>{task.title}</h1>
 	{#if isPromotionTest}
-		<section class="phase-panel promotion-test-panel" aria-label="進級テストの状況"><div><p class="eyebrow">進級テスト</p><h2>テストでは一度だけ解答できます。</h2><p>不合格でも合格数は減りません。規定数に達すると次の段階へ進級します。</p></div><div class="phase-count"><span>現在合格数</span><strong>{displayedProgress.phasePasses}/{phaseTarget(displayedProgress)}</strong></div></section>
+		<section class="phase-panel promotion-test-panel" aria-label="進級テストの状況"><div><p class="eyebrow">進級テスト</p><h2>指摘された部分を修正して再提出できます。</h2><p>複数問では正解済みの問題を残し、間違った問題だけを修正します。規定数に達すると次の段階へ進級します。</p></div><div class="phase-count"><span>現在合格数</span><strong>{displayedProgress.phasePasses}/{phaseTarget(displayedProgress)}</strong></div></section>
 	{:else}
 		<section class="phase-panel training-panel" aria-label="この段階で行うことと現在の合格数"><div class="phase-guidance"><h2>{data.stage.learnerAction}</h2></div><div class="phase-count"><span>現在合格数</span><strong>{displayedProgress.phasePasses}/{phaseTarget(displayedProgress)}</strong></div></section>
 	{/if}
@@ -388,7 +395,7 @@
 	{#if errorMessage}<div class="notice error" role="alert"><p>{errorMessage}</p>{#if scope && !learningLoaded}<button class="text-button" onclick={retryRestore}>もう一度読み込む</button>{/if}</div>{/if}
 	{#if feedback && screen === 'result'}
 		<section bind:this={resultSummary} class="notice progress-notice result-summary" class:requires-revision={feedback.decision === 'revise'} role="status" aria-label="提出の判定と進捗">
-			<strong class="summary-decision">{trialDisqualified ? '練習終了' : feedback.decision === 'pass' ? '合格' : resultIsPromotionTest ? '不合格' : '要修正'}</strong>
+			<strong class="summary-decision">{trialDisqualified ? '練習終了' : feedback.decision === 'pass' ? '合格' : '要修正'}</strong>
 			{#if progressMessage}<p>{progressMessage}</p>{:else}<p>提出は保存されました。進捗を確認するには、下の「進捗を再読み込む」を押してください。</p>{/if}
 		</section>
 	{/if}
@@ -438,7 +445,7 @@
 	{/if}
 	{#if feedback && screen === 'result'}
 		<section bind:this={resultSection} class:promotion-result={resultIsPromotionTest} class="card result">
-			<div class="result-head"><div><p class="eyebrow">結果</p><h2>{trialDisqualified ? 'この問題の練習はここで終了します' : feedback.decision === 'pass' ? isQuestionSet ? `${task.questionSet?.length ?? 0}問すべて正解です` : 'この問題は合格です' : resultIsPromotionTest ? '今回は不合格です' : '解答を修正してください'}</h2></div></div>
+			<div class="result-head"><div><p class="eyebrow">結果</p><h2>{trialDisqualified ? 'この問題の練習はここで終了します' : feedback.decision === 'pass' ? isQuestionSet ? `${task.questionSet?.length ?? 0}問すべて正解です` : 'この問題は合格です' : '解答を修正してください'}</h2></div></div>
 			{#if isQuestionSet && basicResultItems.length}
 				<section class="question-result-list" aria-label="問題ごとの結果">
 					{#each basicResultItems as questionResult, index}
@@ -469,7 +476,7 @@
 					{/each}
 				</section>
 			{/if}
-			{#if feedback.decision === 'revise' && !trialDisqualified && !resultIsPromotionTest && !learning.progress.easyFeedbackEnabled}
+			{#if feedback.decision === 'revise' && !trialDisqualified && !learning.progress.easyFeedbackEnabled}
 				<p class="feedback-setting-hint">解説が難しい場合は、<a href="/progress">進捗・設定画面</a>から、”添削をやさしい表現にする”をONにしてください。読みやすさを優先した解説を表示します。</p>
 			{/if}
 			<div class="editor-actions">{#if resultSyncPending}<button class="button" onclick={refreshSavedResult} disabled={isSubmitting}>進捗を再読み込む</button>{:else if resultAction === 'revise'}<button class="button" onclick={startRevision}>解答を修正する</button>{:else if resultAction === 'course_complete'}<a class="button" href="/progress">学習結果を見る</a>{:else if nextTask}<button class="button" onclick={openNextTask} disabled={isSubmitting}>{isSubmitting ? '問題を準備中…' : '次の問題へ'}</button>{:else}<a class="button" href="/tasks">課題トップ画面へ</a>{/if}<a class="button secondary" href="/history">履歴を見る</a></div>

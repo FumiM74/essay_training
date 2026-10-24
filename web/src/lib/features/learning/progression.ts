@@ -46,7 +46,7 @@ export function phaseLabel(phase: LearningPhase): string {
 
 export function submissionDecisionLabel(phase: LearningPhase, decision: FeedbackDecision, stageId?: number): string {
 	if (decision === 'pass') return '合格';
-	return phase === 'promotion_test' || stageId === 1 ? '不合格' : '要修正';
+	return '要修正';
 }
 
 export function phaseTarget(progress: LearningProgress): number {
@@ -65,7 +65,7 @@ export function submissionProgressMessage(before: LearningProgress, after: Learn
 		const destination = after.currentStageId === MAX_STAGE_ID ? '全課程修了' : '次の段階';
 		return decision === 'pass'
 			? `合格。${destination}まで、進級テストであと${remaining}問合格です。`
-			: `不合格。合格数は${after.phasePasses}/${after.promotionTestQuestionCount}のままです。次の問題へ進みます。`;
+			: `合格数は${after.phasePasses}/${after.promotionTestQuestionCount}のままです。同じ問題を修正して再提出してください。`;
 	}
 	const target = after.requiredTrainingPasses;
 	const remaining = Math.max(0, target - after.phasePasses);
@@ -86,7 +86,7 @@ export function restoredSubmissionProgressMessage(submission: SubmissionRecord, 
 		const destination = submission.stageId === MAX_STAGE_ID ? '全課程修了' : '次の段階';
 		return passed
 			? `${destination}まで、進級テストであと${remaining}問合格です。`
-			: `進級テストは不合格でした。合格数は減りません。`;
+			: `同じ問題を修正して再提出してください。合格数は${current.phasePasses}/${current.promotionTestQuestionCount}のままです。`;
 	}
 	if (passed && current.currentStageId === submission.stageId && current.phase === 'promotion_test') {
 		return `次の問題から${current.promotionTestQuestionCount}問の進級テストです。`;

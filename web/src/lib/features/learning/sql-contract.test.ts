@@ -28,6 +28,8 @@ const migration = [
 	'202609110002_qa_harness_review_fixes.sql',
 	'202609110003_generated_problem_quality_lifecycle.sql',
 	'202609150001_require_feedback_comments.sql',
+	'202610080001_dynamic_qa_exhaustion.sql',
+	'202610200001_revisionable_promotion_tests.sql',
 ].map((file) => readFileSync(resolve(process.cwd(), `../supabase/migrations/${file}`), 'utf8')).join('\n');
 const rlsTest = readFileSync(resolve(process.cwd(), '../supabase/tests/learner_data_rls.sql'), 'utf8');
 const stageSwitchMigration = readFileSync(
@@ -55,6 +57,9 @@ const qaHarnessMigration = readFileSync(resolve(process.cwd(), '../supabase/migr
 const qaHarnessFixMigration = readFileSync(resolve(process.cwd(), '../supabase/migrations/202609110002_qa_harness_review_fixes.sql'), 'utf8');
 const generatedProblemQualityMigration = readFileSync(resolve(process.cwd(), '../supabase/migrations/202609110003_generated_problem_quality_lifecycle.sql'), 'utf8');
 const feedbackCommentMigration = readFileSync(resolve(process.cwd(), '../supabase/migrations/202609150001_require_feedback_comments.sql'), 'utf8');
+const dynamicQaExhaustionMigration = readFileSync(resolve(process.cwd(), '../supabase/migrations/202610080001_dynamic_qa_exhaustion.sql'), 'utf8');
+const revisionablePromotionMigration = readFileSync(resolve(process.cwd(), '../supabase/migrations/202610200001_revisionable_promotion_tests.sql'), 'utf8');
+const qaFixturesSource = readFileSync(resolve(process.cwd(), '../tools/qa/qa-fixtures.mjs'), 'utf8');
 
 describe('Supabase adaptive learning contract', () => {
 	it('旧4軸カラムを残さず段階別特徴署名のRPCを定義する', () => {
@@ -90,8 +95,14 @@ describe('Supabase adaptive learning contract', () => {
 		expect(migration).toContain("learning_phase = 'promotion_test',");
 		expect(migration).toContain('alter column required_training_passes set default 10');
 		expect(rlsTest).toContain('Failed promotion question did not retain accumulated passes');
-		expect(rlsTest).toContain('Failed promotion question did not move to a new problem');
+		expect(rlsTest).toContain('Promotion-test revision did not keep the same problem open');
 		expect(migration).toContain('Stage-1 sets and promotion-test questions are one-shot');
+		expect(revisionablePromotionMigration).toContain("p_feedback ->> 'decision' = 'revise'");
+		expect(revisionablePromotionMigration).toContain('set submitted_at = null');
+		expect(revisionablePromotionMigration).toContain("<> 'disqualified'");
+		expect(revisionablePromotionMigration).toContain('create or replace function public.get_latest_revision_context');
+		expect(revisionablePromotionMigration).toContain("coalesce(auth.role(), '') <> 'service_role'");
+		expect(revisionablePromotionMigration).toContain('to service_role');
 	});
 
 	it('未提出課題を残したまま到達済み段階を切り替えられる', () => {
@@ -178,6 +189,13 @@ describe('Supabase adaptive learning contract', () => {
 		expect(qaHarnessFixMigration).toContain('delete from public.learning_progress');
 		expect(qaHarnessFixMigration).toContain("'-q' || v_qa_key");
 		expect(qaHarnessFixMigration).toContain("'qa:' || v_qa_key");
+		expect(qaFixturesSource).toContain("curriculum.json");
+		expect(qaFixturesSource).toContain('fixedProblemCountForStage');
+		expect(qaFixturesSource).not.toContain('Array.from({ length: 10 }');
+		expect(dynamicQaExhaustionMigration).toContain('jsonb_array_length(p_problems) not between 1 and 500');
+		expect(dynamicQaExhaustionMigration).toContain("where stage_id = p_stage_id and status = 'approved'");
+		expect(dynamicQaExhaustionMigration).toContain('Approved shared problems are normally preferred over Claude');
+		expect(dynamicQaExhaustionMigration).toContain('to service_role');
 	});
 
 	it('生成問題を独立審査後の個別試用にし、5回目の要修正で共有対象外にする', () => {

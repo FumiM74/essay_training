@@ -13,6 +13,40 @@ type Reservation = {
 	policy?: { maxInputTokens: number; maxOutputTokens: number; reviewStatus: string };
 };
 
+type StoredRevision = {
+	previousAnswer?: unknown;
+	previousFeedback?: unknown;
+};
+
+function storedRevisionContext(value: StoredRevision | null): {
+	previousAnswer: string;
+	requestedChanges: Array<{ title: string; guidance: string }>;
+} | undefined {
+	if (!value || typeof value.previousAnswer !== 'string' || !value.previousAnswer.trim()
+		|| !value.previousFeedback || typeof value.previousFeedback !== 'object' || Array.isArray(value.previousFeedback)) return undefined;
+	const feedback = value.previousFeedback as Record<string, unknown>;
+	if (feedback.decision !== 'revise' || !Array.isArray(feedback.priorityFeedback)) return undefined;
+	const requestedChanges = feedback.priorityFeedback.flatMap((item) => {
+		if (!item || typeof item !== 'object') return [];
+		const raw = item as Record<string, unknown>;
+		return typeof raw.title === 'string' && typeof raw.guidance === 'string'
+			? [{ title: raw.title.slice(0, 120), guidance: raw.guidance.slice(0, 1000) }]
+			: [];
+	}).slice(0, 3);
+	return requestedChanges.length ? { previousAnswer: value.previousAnswer.slice(0, 20000), requestedChanges } : undefined;
+}
+
+function lockedQuestionIds(value: StoredRevision | null): Set<string> {
+	if (!value?.previousFeedback || typeof value.previousFeedback !== 'object' || Array.isArray(value.previousFeedback)) return new Set();
+	const results = (value.previousFeedback as Record<string, unknown>).basicQuestionResults;
+	if (!Array.isArray(results)) return new Set();
+	return new Set(results.flatMap((item) => item && typeof item === 'object'
+		&& (item as Record<string, unknown>).correct === true
+		&& typeof (item as Record<string, unknown>).questionId === 'string'
+		? [(item as Record<string, unknown>).questionId as string]
+		: []));
+}
+
 function fnvHash(value: string): string {
 	let hash = 2166136261;
 	for (const character of value.normalize('NFKC').toLowerCase().replace(/[\s　]+/g, '').replace(/[「」『』（）()、。！？!?]/g, '')) {
@@ -56,7 +90,7 @@ Deno.serve(async (request) => {
 	const maxTokens = outputTokenLimit(input.stageId);
 	const preliminarySkills = input.basicQuestions ? [...new Set(input.basicQuestions.map(skillForBasicQuestion))] : [];
 	const preliminaryInputTokens = input.basicQuestions ? estimateClaudeInputTokens(
-		buildFeedbackPrompt({ stageId: input.stageId, prompt: '', hint: '', skillTargets: preliminarySkills, learningPhase: 'training', easyFeedbackEnabled: true }, input.answer, input.basicQuestions),
+		buildFeedbackPrompt({ stageId: input.stageId, prompt: '', hint: '', skillTargets: preliminarySkills, learningPhase: 'training', easyFeedbackEnabled: true }, input.answer, input.basicQuestions, input.revisionContext),
 		feedbackOutputSchema(input.stageId, preliminarySkills),
 	) : null;
 	const requestHash = await sha256(JSON.stringify({ taskId: input.taskId, stageId: input.stageId, answer: input.answer, basicQuestions: input.basicQuestions }));
@@ -80,6 +114,16 @@ Deno.serve(async (request) => {
 		}).catch(() => undefined);
 	};
 	let easyFeedbackEnabled = false;
+	let storedRevision: StoredRevision | null = null;
+	try {
+		storedRevision = await rpc<StoredRevision | null>(env, 'get_latest_revision_context', {
+			p_learner_id: learnerId,
+			p_task_key: input.taskId,
+		});
+	} catch {
+		await failReservation('revision_context_unavailable');
+		return jsonResponse(request, { error: 'revision_context_unavailable' }, 503, env);
+	}
 	try { easyFeedbackEnabled = await rpc<boolean>(env, 'get_ai_feedback_preference', { p_learner_id: learnerId }); }
 	catch {
 		await failReservation('feedback_preference_unavailable');
@@ -89,18 +133,21 @@ Deno.serve(async (request) => {
 		await failReservation('invalid_reservation');
 		return jsonResponse(request, { error: 'invalid_reservation' }, 500, env);
 	}
-	if (questionSetSizeForStage(input.stageId) !== null && questionSetPromptHash(reservation.problem.prompt, input.basicQuestions!) !== reservation.problem.promptHash) {
+	const lockedIds = lockedQuestionIds(storedRevision);
+	const effectiveBasicQuestions = input.basicQuestions?.map((question) => ({ ...question, lockedCorrect: lockedIds.has(question.id) }));
+	const effectiveRevisionContext = effectiveBasicQuestions ? undefined : storedRevisionContext(storedRevision);
+	if (questionSetSizeForStage(input.stageId) !== null && questionSetPromptHash(reservation.problem.prompt, effectiveBasicQuestions!) !== reservation.problem.promptHash) {
 		await failReservation('question_set_problem_mismatch');
 		return jsonResponse(request, { error: 'question_set_problem_mismatch' }, 409, env);
 	}
 	let providerRequestId = '';
 	let providerUsage = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
 	try {
-		const skills = expectedSkills(reservation.problem, input.basicQuestions);
+		const skills = expectedSkills(reservation.problem, effectiveBasicQuestions);
 		const prompt = buildFeedbackPrompt({
 			stageId: input.stageId, prompt: reservation.problem.prompt, hint: reservation.problem.hint,
 			skillTargets: skills, learningPhase: reservation.problem.learningPhase, easyFeedbackEnabled,
-		}, input.answer, input.basicQuestions);
+		}, input.answer, effectiveBasicQuestions, effectiveRevisionContext);
 		const schema = feedbackOutputSchema(input.stageId, skills);
 		const estimatedInputTokens = estimateClaudeInputTokens(prompt, schema);
 		if (!reservation.policy || estimatedInputTokens > reservation.policy.maxInputTokens) {
@@ -111,7 +158,7 @@ Deno.serve(async (request) => {
 		providerRequestId = claude.id;
 		providerUsage = claude.usage;
 		const feedback = questionSetSizeForStage(input.stageId) !== null
-			? completeQuestionSetFeedback(claude.value, input.basicQuestions!)
+			? completeQuestionSetFeedback(claude.value, effectiveBasicQuestions!)
 			: validateFeedback(claude.value, skills, input.answer);
 		const submission = await rpc(env, 'finalize_ai_feedback', {
 			p_learner_id: learnerId, p_request_id: input.requestId, p_task_key: input.taskId,

@@ -38,11 +38,11 @@ describe('task screen flow', () => {
 		expect(canAnswerTask({ ...base, isSubmitting: true })).toBe(false);
 	});
 
-	it('通常問題の要修正だけを同じ問題の修正へ戻す', () => {
+	it('トレーニングと進級テストの要修正を同じ問題の修正へ戻す', () => {
 		expect(taskResultAction({ decision: 'revise', phase: 'training', stageId: 2, courseCompleted: false })).toBe('revise');
 		expect(taskResultAction({ decision: 'revise', phase: 'training', stageId: 1, courseCompleted: false })).toBe('revise');
-		expect(taskResultAction({ decision: 'revise', phase: 'promotion_test', stageId: 1, courseCompleted: false })).toBe('next');
-		expect(taskResultAction({ decision: 'revise', phase: 'promotion_test', stageId: 2, courseCompleted: false })).toBe('next');
+		expect(taskResultAction({ decision: 'revise', phase: 'promotion_test', stageId: 1, courseCompleted: false })).toBe('revise');
+		expect(taskResultAction({ decision: 'revise', phase: 'promotion_test', stageId: 2, courseCompleted: false })).toBe('revise');
 		expect(taskResultAction({ decision: 'pass', phase: 'training', stageId: 2, courseCompleted: false })).toBe('next');
 	});
 
@@ -53,7 +53,7 @@ describe('task screen flow', () => {
 		for (const stageId of [2, 7, 14]) {
 			expect(taskResultAction({ decision: 'revise', phase: 'training', stageId, courseCompleted: true })).toBe('revise');
 			expect(taskResultAction({ decision: 'pass', phase: 'training', stageId, courseCompleted: true })).toBe('next');
-			expect(taskResultAction({ decision: 'revise', phase: 'promotion_test', stageId, courseCompleted: true })).toBe('next');
+			expect(taskResultAction({ decision: 'revise', phase: 'promotion_test', stageId, courseCompleted: true })).toBe('revise');
 		}
 		expect(taskResultAction({ decision: 'pass', phase: 'promotion_test', stageId: 14, courseCompleted: false })).toBe('next');
 	});

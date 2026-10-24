@@ -57,10 +57,18 @@ function normalizedBasicAnswer(value: string): string {
 	return value.normalize('NFKC').trim().replace(/[\s　、。！？!?]/g, '');
 }
 
-export function createBasicQuestionSetFeedback(questions: BasicQuestion[], answers: Record<string, string>): FeedbackResult {
+export function createBasicQuestionSetFeedback(
+	questions: BasicQuestion[],
+	answers: Record<string, string>,
+	previousFeedback: FeedbackResult | null = null,
+): FeedbackResult {
+	const lockedCorrectIds = new Set(
+		(previousFeedback?.basicQuestionResults ?? []).filter((result) => result.correct).map((result) => result.questionId),
+	);
 	const results = questions.map((question) => {
 		const answer = answers[question.id] ?? '';
-		const correct = question.acceptedAnswers.some((accepted) => normalizedBasicAnswer(accepted) === normalizedBasicAnswer(answer));
+		const correct = lockedCorrectIds.has(question.id)
+			|| question.acceptedAnswers.some((accepted) => normalizedBasicAnswer(accepted) === normalizedBasicAnswer(answer));
 		return { question, answer, correct };
 	});
 	const allCorrect = results.every((result) => result.correct);
